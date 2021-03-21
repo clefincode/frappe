@@ -4,18 +4,10 @@
 from __future__ import unicode_literals
 
 import frappe
-from dateutil.parser._parser import ParserError
 import operator
 import json
 import re, datetime, math, time
-import babel.dates
-from babel.core import UnknownLocaleError
-from dateutil import parser
-from num2words import num2words
-from six.moves import html_parser as HTMLParser
 from six.moves.urllib.parse import quote, urljoin
-from html2text import html2text
-from markdown2 import markdown as _markdown, MarkdownError
 from six import iteritems, text_type, string_types, integer_types
 from frappe.desk.utils import slug
 
@@ -34,6 +26,8 @@ def getdate(string_date=None):
 	Converts string date (yyyy-mm-dd) to datetime.date object.
 	If no input is provided, current date is returned.
 	"""
+	from dateutil import parser
+	from dateutil.parser._parser import ParserError
 
 	if not string_date:
 		return get_datetime().date()
@@ -53,6 +47,8 @@ def getdate(string_date=None):
 		), title=frappe._('Invalid Date'))
 
 def get_datetime(datetime_str=None):
+	from dateutil import parser
+
 	if datetime_str is None:
 		return now_datetime()
 
@@ -74,6 +70,8 @@ def get_datetime(datetime_str=None):
 		return parser.parse(datetime_str)
 
 def to_timedelta(time_str):
+	from dateutil import parser
+
 	if isinstance(time_str, string_types):
 		t = parser.parse(time_str)
 		return datetime.timedelta(hours=t.hour, minutes=t.minute, seconds=t.second, microseconds=t.microsecond)
@@ -83,6 +81,8 @@ def to_timedelta(time_str):
 
 def add_to_date(date, years=0, months=0, weeks=0, days=0, hours=0, minutes=0, seconds=0, as_string=False, as_datetime=False):
 	"""Adds `days` to the given date"""
+	from dateutil import parser
+	from dateutil.parser._parser import ParserError
 	from dateutil.relativedelta import relativedelta
 
 	if date==None:
@@ -255,13 +255,15 @@ def get_quarter_ending(date):
 
 def get_year_ending(date):
 	''' returns year ending of the given date '''
-
+	date = getdate(date)
 	# first day of next year (note year starts from 1)
 	date = add_to_date('{}-01-01'.format(date.year), months = 12)
 	# last day of this month
 	return add_to_date(date, days=-1)
 
 def get_time(time_str):
+	from dateutil import parser
+
 	if isinstance(time_str, datetime.datetime):
 		return time_str.time()
 	elif isinstance(time_str, datetime.time):
@@ -315,6 +317,8 @@ def format_date(string_date=None, format_string=None):
 	* mm-dd-yyyy
 	* dd/mm/yyyy
 	"""
+	import babel.dates
+	from babel.core import UnknownLocaleError
 
 	if not string_date:
 		return ''
@@ -343,6 +347,8 @@ def format_time(time_string=None, format_string=None):
 	* HH:mm:ss
 	* HH:mm
 	"""
+	import babel.dates
+	from babel.core import UnknownLocaleError
 
 	if not time_string:
 		return ''
@@ -367,6 +373,9 @@ def format_datetime(datetime_string, format_string=None):
 	* dd-mm-yyyy HH:mm:ss
 	* mm-dd-yyyy HH:mm
 	"""
+	import babel.dates
+	from babel.core import UnknownLocaleError
+
 	if not datetime_string:
 		return
 
@@ -464,23 +473,23 @@ def get_weekday(datetime=None):
 def get_timespan_date_range(timespan):
 	today = nowdate()
 	date_range_map = {
-		"last week": lambda: (add_to_date(today, days=-7), today),
-		"last month": lambda: (add_to_date(today, months=-1), today),
-		"last quarter": lambda: (add_to_date(today, months=-3), today),
-		"last 6 months": lambda: (add_to_date(today, months=-6), today),
-		"last year": lambda: (add_to_date(today, years=-1), today),
+		"last week": lambda: (get_first_day_of_week(add_to_date(today, days=-7)), get_last_day_of_week(add_to_date(today, days=-7))),
+		"last month": lambda: (get_first_day(add_to_date(today, months=-1)), get_last_day(add_to_date(today, months=-1))),
+		"last quarter": lambda: (get_quarter_start(add_to_date(today, months=-3)), get_quarter_ending(add_to_date(today, months=-3))),
+		"last 6 months": lambda: (get_quarter_start(add_to_date(today, months=-6)), get_quarter_ending(add_to_date(today, months=-3))),
+		"last year": lambda: (get_year_start(add_to_date(today, years=-1)), get_year_ending(add_to_date(today, years=-1))),
 		"yesterday": lambda: (add_to_date(today, days=-1),) * 2,
 		"today": lambda: (today, today),
 		"tomorrow": lambda: (add_to_date(today, days=1),) * 2,
-		"this week": lambda: (get_first_day_of_week(today, as_str=True), today),
-		"this month": lambda: (get_first_day(today, as_str=True), today),
-		"this quarter": lambda: (get_quarter_start(today, as_str=True), today),
-		"this year": lambda: (get_year_start(today, as_str=True), today),
-		"next week": lambda: (today, add_to_date(today, days=7)),
-		"next month": lambda: (today, add_to_date(today, months=1)),
-		"next quarter": lambda: (today, add_to_date(today, months=3)),
-		"next 6 months": lambda: (today, add_to_date(today, months=6)),
-		"next year": lambda: (today, add_to_date(today, years=1)),
+		"this week": lambda: (get_first_day_of_week(today), today),
+		"this month": lambda: (get_first_day(today), today),
+		"this quarter": lambda: (get_quarter_start(today), today),
+		"this year": lambda: (get_year_start(today), today),
+		"next week": lambda: (get_first_day_of_week(add_to_date(today, days=7)), get_last_day_of_week(add_to_date(today, days=7))),
+		"next month": lambda: (get_first_day(add_to_date(today, months=1)), get_last_day(add_to_date(today, months=1))),
+		"next quarter": lambda: (get_quarter_start(add_to_date(today, months=3)), get_quarter_ending(add_to_date(today, months=3))),
+		"next 6 months": lambda: (get_quarter_start(add_to_date(today, months=3)), get_quarter_ending(add_to_date(today, months=6))),
+		"next year": lambda: (get_year_start(add_to_date(today, years=1)), get_year_ending(add_to_date(today, years=1))),
 	}
 
 	if timespan in date_range_map:
@@ -488,6 +497,8 @@ def get_timespan_date_range(timespan):
 
 def global_date_format(date, format="long"):
 	"""returns localized date in the form of January 1, 2012"""
+	import babel.dates
+
 	date = getdate(date)
 	formatted_date = babel.dates.format_date(date, locale=(frappe.local.lang or "en").replace("-", "_"), format=format)
 	return formatted_date
@@ -847,6 +858,8 @@ def in_words(integer, in_million=True):
 	"""
 	Returns string in words for the given integer.
 	"""
+	from num2words import num2words
+
 	locale = 'en_IN' if not in_million else frappe.local.lang
 	integer = int(integer)
 	try:
@@ -1339,6 +1352,9 @@ def strip(val, chars=None):
 	return (val or "").replace("\ufeff", "").replace("\u200b", "").strip(chars)
 
 def to_markdown(html):
+	from html2text import html2text
+	from six.moves import html_parser as HTMLParser
+
 	text = None
 	try:
 		text = html2text(html or '')
@@ -1348,6 +1364,8 @@ def to_markdown(html):
 	return text
 
 def md_to_html(markdown_text):
+	from markdown2 import markdown as _markdown, MarkdownError
+
 	extras = {
 		'fenced-code-blocks': None,
 		'tables': None,
@@ -1362,7 +1380,7 @@ def md_to_html(markdown_text):
 
 	html = None
 	try:
-		html = _markdown(markdown_text or '', extras=extras)
+		html = UnicodeWithAttrs(_markdown(markdown_text or '', extras=extras))
 	except MarkdownError:
 		pass
 
@@ -1472,3 +1490,9 @@ def get_user_info_for_avatar(user_id):
 	except Exception:
 		frappe.local.message_log = []
 	return user_info
+
+
+class UnicodeWithAttrs(text_type):
+	def __init__(self, text):
+		self.toc_html = text.toc_html
+		self.metadata = text.metadata
