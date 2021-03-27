@@ -5,7 +5,7 @@
 from __future__ import unicode_literals
 import re, copy, os, shutil
 import json
-from frappe.cache_manager import clear_user_cache
+from frappe.cache_manager import clear_user_cache, clear_controller_cache
 
 # imports - third party imports
 import six
@@ -75,7 +75,7 @@ class DocType(Document):
 		self.scrub_field_names()
 		self.set_default_in_list_view()
 		self.set_default_translatable()
-		self.validate_series()
+		validate_series(self)
 		self.validate_document_type()
 		validate_fields(self)
 
@@ -238,44 +238,6 @@ class DocType(Document):
 			# unique is automatically an index
 			if d.unique: d.search_index = 0
 
-	def validate_series(self, autoname=None, name=None):
-		"""Validate if `autoname` property is correctly set."""
-		if not autoname: autoname = self.autoname
-		if not name: name = self.name
-
-		if not autoname and self.get("fields", {"fieldname":"naming_series"}):
-			self.autoname = "naming_series:"
-		elif self.autoname == "naming_series:" and not self.get("fields", {"fieldname":"naming_series"}):
-			frappe.throw(_("Invalid fieldname '{0}' in autoname").format(self.autoname))
-
-		# validate field name if autoname field:fieldname is used
-		# Create unique index on autoname field automatically.
-		if autoname and autoname.startswith('field:'):
-			field = autoname.split(":")[1]
-			if not field or field not in [ df.fieldname for df in self.fields ]:
-				frappe.throw(_("Invalid fieldname '{0}' in autoname").format(field))
-			else:
-				for df in self.fields:
-					if df.fieldname == field:
-						df.unique = 1
-						break
-
-		if autoname and (not autoname.startswith('field:')) \
-			and (not autoname.startswith('eval:')) \
-			and (not autoname.lower() in ('prompt', 'hash')) \
-			and (not autoname.startswith('naming_series:')) \
-			and (not autoname.startswith('format:')):
-
-			prefix = autoname.split('.')[0]
-			used_in = frappe.db.sql("""
-				SELECT `name`
-				FROM `tabDocType`
-				WHERE `autoname` LIKE CONCAT(%s, '.%%')
-				AND `name`!=%s
-			""", (prefix, name))
-			if used_in:
-				frappe.throw(_("Series {0} already used in {1}").format(prefix, used_in[0][0]))
-
 	def on_update(self):
 		"""Update database schema, make controller templates if `custom` is not set and clear cache."""
 		self.delete_duplicate_custom_fields()
@@ -290,9 +252,15 @@ class DocType(Document):
 
 		self.update_fields_to_fetch()
 
-		from frappe import conf
-		allow_doctype_export = frappe.flags.allow_doctype_export or (not frappe.flags.in_test and conf.get('developer_mode'))
-		if not self.custom and not frappe.flags.in_import and allow_doctype_export:
+		allow_doctype_export = (
+			not self.custom
+			and not frappe.flags.in_import
+			and (
+				frappe.conf.developer_mode
+				or frappe.flags.allow_doctype_export
+			)
+		)
+		if allow_doctype_export:
 			self.export_doc()
 			self.make_controller_template()
 
@@ -382,13 +350,10 @@ class DocType(Document):
 		if merge:
 			frappe.throw(_("DocType can not be merged"))
 
-		# Do not rename and move files and folders for custom doctype
-		if not self.custom and not frappe.flags.in_test and not frappe.flags.in_patch:
-			self.rename_files_and_folders(old, new)
-
 	def after_rename(self, old, new, merge=False):
 		"""Change table name using `RENAME TABLE` if table exists. Or update
 		`doctype` property for Single type."""
+
 		if self.issingle:
 			frappe.db.sql("""update tabSingles set doctype=%s where doctype=%s""", (new, old))
 			frappe.db.sql("""update tabSingles set value=%s
@@ -398,6 +363,18 @@ class DocType(Document):
 				"mariadb": f"RENAME TABLE `tab{old}` TO `tab{new}`",
 				"postgres": f"ALTER TABLE `tab{old}` RENAME TO `tab{new}`"
 			})
+			frappe.db.commit()
+
+		# Do not rename and move files and folders for custom doctype
+		if not self.custom:
+			if not frappe.flags.in_patch:
+				self.rename_files_and_folders(old, new)
+
+			clear_controller_cache(old)
+
+	def after_delete(self):
+		if not self.custom:
+			clear_controller_cache(self.name)
 
 	def rename_files_and_folders(self, old, new):
 		# move files
@@ -674,7 +651,45 @@ class DocType(Document):
 				message = _("Row #{0}: Could not find field {1} in {2} DocType").format(index+1, frappe.bold(link.link_fieldname), frappe.bold(link.link_doctype))
 				frappe.throw(message, InvalidFieldNameError, _("Invalid Fieldname"))
 
+def validate_series(dt, autoname=None, name=None):
+	"""Validate if `autoname` property is correctly set."""
+	if not autoname:
+		autoname = dt.autoname
+	if not name:
+		name = dt.name
 
+	if not autoname and dt.get("fields", {"fieldname":"naming_series"}):
+		dt.autoname = "naming_series:"
+	elif dt.autoname == "naming_series:" and not dt.get("fields", {"fieldname":"naming_series"}):
+		frappe.throw(_("Invalid fieldname '{0}' in autoname").format(dt.autoname))
+
+	# validate field name if autoname field:fieldname is used
+	# Create unique index on autoname field automatically.
+	if autoname and autoname.startswith('field:'):
+		field = autoname.split(":")[1]
+		if not field or field not in [df.fieldname for df in dt.fields]:
+			frappe.throw(_("Invalid fieldname '{0}' in autoname").format(field))
+		else:
+			for df in dt.fields:
+				if df.fieldname == field:
+					df.unique = 1
+					break
+
+	if autoname and (not autoname.startswith('field:')) \
+		and (not autoname.startswith('eval:')) \
+		and (not autoname.lower() in ('prompt', 'hash')) \
+		and (not autoname.startswith('naming_series:')) \
+		and (not autoname.startswith('format:')):
+
+		prefix = autoname.split('.')[0]
+		used_in = frappe.db.sql("""
+			SELECT `name`
+			FROM `tabDocType`
+			WHERE `autoname` LIKE CONCAT(%s, '.%%')
+			AND `name`!=%s
+		""", (prefix, name))
+		if used_in:
+			frappe.throw(_("Series {0} already used in {1}").format(prefix, used_in[0][0]))
 
 def validate_fields_for_doctype(doctype):
 	doc = frappe.get_doc("DocType", doctype)
@@ -1000,10 +1015,10 @@ def validate_fields(meta):
 	check_sort_field(meta)
 	check_image_field(meta)
 
-def validate_permissions_for_doctype(doctype, for_remove=False):
+def validate_permissions_for_doctype(doctype, for_remove=False, alert=False):
 	"""Validates if permissions are set correctly."""
 	doctype = frappe.get_doc("DocType", doctype)
-	validate_permissions(doctype, for_remove)
+	validate_permissions(doctype, for_remove, alert=alert)
 
 	# save permissions
 	for perm in doctype.get("permissions"):
@@ -1026,9 +1041,10 @@ def clear_permissions_cache(doctype):
 		""", doctype):
 		frappe.clear_cache(user=user)
 
-def validate_permissions(doctype, for_remove=False):
+def validate_permissions(doctype, for_remove=False, alert=False):
 	permissions = doctype.get("permissions")
-	if not permissions:
+	# Some DocTypes may not have permissions by default, don't show alert for them
+	if not permissions and alert:
 		frappe.msgprint(_('No Permissions Specified'), alert=True, indicator='orange')
 	issingle = issubmittable = isimportable = False
 	if doctype:
@@ -1040,7 +1056,7 @@ def validate_permissions(doctype, for_remove=False):
 		return _("For {0} at level {1} in {2} in row {3}").format(d.role, d.permlevel, d.parent, d.idx)
 
 	def check_atleast_one_set(d):
-		if not d.read and not d.write and not d.submit and not d.cancel and not d.create:
+		if not d.select and not d.read and not d.write and not d.submit and not d.cancel and not d.create:
 			frappe.throw(_("{0}: No basic permissions set").format(get_txt(d)))
 
 	def check_double(d):

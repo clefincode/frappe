@@ -17,6 +17,7 @@ from frappe.core.doctype.doctype.doctype import validate_fields_for_doctype, che
 from frappe.custom.doctype.custom_field.custom_field import create_custom_field
 from frappe.custom.doctype.property_setter.property_setter import delete_property_setter
 from frappe.model.docfield import supports_translation
+from frappe.core.doctype.doctype.doctype import validate_series
 
 class CustomizeForm(Document):
 	def on_update(self):
@@ -135,7 +136,7 @@ class CustomizeForm(Document):
 	def save_customization(self):
 		if not self.doc_type:
 			return
-
+		validate_series(self, self.autoname, self.doc_type)
 		self.flags.update_db = False
 		self.flags.rebuild_doctype_for_global_search = False
 		self.set_property_setters()
@@ -455,11 +456,15 @@ class CustomizeForm(Document):
 		self.fetch_to_customize()
 
 def reset_customization(doctype):
-	frappe.db.sql("""
-		DELETE FROM `tabProperty Setter` WHERE doc_type=%s
-			and `field_name`!='naming_series'
-			and `property`!='options'
-		""", doctype)
+	setters = frappe.get_all("Property Setter", filters={
+		'doc_type': doctype,
+		'field_name': ['!=', 'naming_series'],
+		'property': ['!=', 'options']
+	}, pluck='name')
+
+	for setter in setters:
+		frappe.delete_doc("Property Setter", setter)
+
 	frappe.clear_cache(doctype=doctype)
 
 doctype_properties = {
@@ -481,7 +486,8 @@ doctype_properties = {
 	'show_preview_popup': 'Check',
 	'email_append_to': 'Check',
 	'subject_field': 'Data',
-	'sender_field': 'Data'
+	'sender_field': 'Data',
+	'autoname': 'Data'
 }
 
 docfield_properties = {
