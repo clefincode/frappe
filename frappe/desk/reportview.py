@@ -49,6 +49,18 @@ def execute(doctype, *args, **kwargs):
 def get_form_params():
 	"""Stringify GET request parameters."""
 	data = frappe._dict(frappe.local.form_dict)
+	new_filters = ""
+	if(data['doctype'] == "Item" and data['filters']):
+		is_filter = 0
+		for i in range(0, len(data['filters'].split("],["))):
+			if(data['filters'].split("],[")[i].find("barcode") > 0):
+				is_filter = 1
+				new_filters += data['filters'].split("],[")[i].replace("Item", "Item Barcode")
+			else:
+				new_filters += data['filters'].split("],[")[i]
+		if(is_filter == 1):
+			new_filters = "],[".join(new_filters.split('""'))
+			data['filters'] = new_filters
 	clean_params(data)
 	validate_args(data)
 	return data

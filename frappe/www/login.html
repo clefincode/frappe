@@ -59,7 +59,9 @@
 {% macro logo_section() %}
 <div class="page-card-head">
 	<img class="app-logo" src="{{ logo }}">
-	<h4>{{ _('Login to {0}').format(app_name or _("Frappe")) }}</h4>
+	<!-- custom update -->
+	<!-- <h4>{{ _('Login to {0}').format(app_name or _("Frappe")) }}</h4> -->
+	<h4>{{ _('Login') }}</h4>
 </div>
 {% endmacro %}
 
@@ -142,6 +144,16 @@
 						<label class="form-label sr-only" for="signup_email">Email</label>
 						<input type="email" id="signup_email" class="form-control"
 							placeholder="{{ _('jane@example.com') }}" required>
+					</div>
+					<div class="form-group">
+						<label class="form-label sr-only" for="signup_phone">Phone</label>
+						<input type="tel" id="signup_phone" class="form-control"
+							placeholder="{{ _('Phone') }}" required>
+					</div>
+					<div class="form-group">
+						<label class="form-label sr-only" for="signup_birthday">Birthday</label>
+						<input type="text" onfocus="(this.type='date')" id="signup_birthday" class="form-control"
+							placeholder="{{ _('Birth Date') }}" >
 					</div>
 				</div>
 				<div class="page-card-actions">
