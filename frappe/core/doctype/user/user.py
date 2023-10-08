@@ -21,6 +21,7 @@ from frappe.website.utils import is_signup_disabled
 from frappe.rate_limiter import rate_limit
 from frappe.core.doctype.user_type.user_type import user_linked_with_permission_on_doctype
 
+#from kensingtonbn.www.api.api import create_customer
 
 STANDARD_USERS = ("Guest", "Administrator")
 
@@ -786,6 +787,11 @@ def sign_up(email, full_name,phone,birthday, redirect_to):
 		if default_role:
 			user.add_roles(default_role)
 
+		# Custom Update to create a New Customer
+		now=frappe.flags.in_test or frappe.flags.in_install
+		frappe.enqueue("kensingtonbn.www.api.api.create_customer", user = user, now = now)
+		
+		# End Custom Update 
 		if redirect_to:
 			frappe.cache().hset('redirect_after_login', user.name, redirect_to)
 

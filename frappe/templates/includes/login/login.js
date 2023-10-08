@@ -35,14 +35,17 @@ login.bind_events = function () {
 		args.email = ($("#signup_email").val() || "").trim();
 		args.redirect_to = frappe.utils.sanitise_redirect(frappe.utils.get_url_arg("redirect-to"));
 		args.full_name = frappe.utils.xss_sanitise(($("#signup_fullname").val() || "").trim());
-		//custom update
-		args.phone = ($("#signup_phone").val() || "").trim();
-		args.birthday = ($("#signup_birthday").val() || "").trim();
-		//custom update
 		if (!args.email || !validate_email(args.email) || !args.full_name) {
 			login.set_status('{{ _("Valid email and name required") }}', 'red');
 			return false;
 		}
+		//custom update
+		args.phone = ($("#signup_phone").val() || "").trim();
+		args.birthday = ($("#signup_birthday").val() || "").trim();
+		if (!args.phone) {
+			login.set_status('{{ _("Phone Number is Mandatory") }}', 'red');
+		}
+		//custom update
 		login.call(args);
 		return false;
 	});
