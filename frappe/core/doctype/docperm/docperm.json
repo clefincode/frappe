@@ -218,12 +218,14 @@
  "idx": 1,
  "istable": 1,
  "links": [],
- "modified": "2020-12-03 15:15:30.488212",
+ "modified": "2024-03-28 12:56:47.770564",
  "modified_by": "Administrator",
  "module": "Core",
  "name": "DocPerm",
+ "naming_rule": "Random",
  "owner": "Administrator",
  "permissions": [],
  "sort_field": "modified",
- "sort_order": "ASC"
+ "sort_order": "ASC",
+ "states": []
 }

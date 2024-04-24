@@ -305,7 +305,11 @@ $.extend(frappe.model, {
 		newdoc.modified = "";
 		newdoc.lft = null;
 		newdoc.rgt = null;
-
+		// Custom Script
+		if (newdoc.doctype == 'Quotation'){
+			newdoc.is_duplicated = 1;
+		}
+		// End Custom Script
 		return newdoc;
 	},
 

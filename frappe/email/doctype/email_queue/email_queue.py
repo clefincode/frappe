@@ -128,17 +128,25 @@ class EmailQueue(Document):
 
 		with SendMailContext(self, is_background_task, smtp_server_instance) as ctx:
 			message = None
+			sender = self.sender
 			for recipient in self.recipients:
 				if not recipient.is_mail_to_be_sent():
 					continue
 
+				# custom update : fix the issue of "sender address rejected not owned by user notifications@clefincode.com"
+				# ex: self.sender = Neamah AlSafarjalani <neamah.s@clefincode.com>
+				if "<" in sender:
+					sender = sender.split('<')[1].replace('>', '')
+				if not frappe.get_value("Email Account" , {"email_id": sender , "enable_outgoing": 1} , "name"):
+					sender = frappe.get_value("Email Account" , {"name": self.email_account , "default_outgoing": 1} , "email_id")
+				# end custom update
 				message = ctx.build_message(recipient.recipient)
 				method = get_hook_method("override_email_send")
 				if method:
-					method(self, self.sender, recipient.recipient, message)
+					method(self, sender, recipient.recipient, message)
 				else:
 					if not frappe.flags.in_test:
-						ctx.smtp_session.sendmail(from_addr=self.sender, to_addrs=recipient.recipient, msg=message)
+						ctx.smtp_session.sendmail(from_addr=sender, to_addrs=recipient.recipient, msg=message)
 					ctx.add_to_sent_list(recipient)
 
 			if frappe.flags.in_test:
