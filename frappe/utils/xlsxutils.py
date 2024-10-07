@@ -63,7 +63,7 @@ def handle_html(data):
 
 	h = HTML2Text()
 	h.unicode_snob = True
-	h = h.unescape(data or "")
+	#h = h.unescape(data or "")
 
 	obj = HTML2Text()
 	obj.ignore_links = True
