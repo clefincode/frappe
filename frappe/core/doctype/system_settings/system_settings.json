@@ -126,10 +126,10 @@
    "fieldtype": "Column Break"
   },
   {
+   "fetch_from": "country.time_zones",
    "fieldname": "time_zone",
    "fieldtype": "Select",
    "label": "Time Zone",
-   "read_only": 1,
    "reqd": 1
   },
   {

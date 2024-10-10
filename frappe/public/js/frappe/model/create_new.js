@@ -319,9 +319,11 @@ $.extend(frappe.model, {
 		newdoc.lft = null;
 		newdoc.rgt = null;
 
-		if (from_amend && parent_doc) {
-			newdoc._amended_from = doc.name;
+		// Custom Script
+		if (newdoc.doctype == 'Quotation'){
+			newdoc.is_duplicated = 1;
 		}
+		// End Custom Script
 
 		return newdoc;
 	},

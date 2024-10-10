@@ -214,8 +214,10 @@
  "modified_by": "Administrator",
  "module": "Core",
  "name": "DocPerm",
+ "naming_rule": "Random",
  "owner": "Administrator",
  "permissions": [],
  "sort_field": "modified",
- "sort_order": "ASC"
+ "sort_order": "ASC",
+ "states": []
 }

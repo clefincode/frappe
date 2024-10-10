@@ -164,9 +164,15 @@ def get_email_header(doc, language: str | None = None):
 
 @frappe.whitelist()
 def get_notification_logs(limit=20):
-	notification_logs = frappe.db.get_list(
-		"Notification Log", fields=["*"], limit=limit, order_by="modified desc"
-	)
+	# Custom update
+	# notification_logs = frappe.db.get_list(
+	# 	"Notification Log", fields=["*"], limit=limit, order_by="modified desc"
+	# )
+	notification_logs = get_notifications(limit) 
+	if not notification_logs:
+		return {"notification_logs": None, "user_info": None}
+	#End Custom Update
+	#notification_logs = frappe.db.sql("""SELECT * FROM `tabNotification Log` where 1=2""", as_dict=True)
 
 	users = [log.from_user for log in notification_logs]
 	users = [*set(users)]  # remove duplicates
@@ -208,3 +214,35 @@ def set_notifications_as_unseen(user):
 		frappe.db.set_value("Notification Settings", user, "seen", 0, update_modified=False)
 	except frappe.DoesNotExistError:
 		return
+
+#Custom Update
+def get_notifications(limit):
+	meta = frappe.get_meta("Notification Log")
+	role_permissions = frappe.permissions.get_role_permissions(meta, user=frappe.session.user)
+
+	if not (role_permissions.get("select") or role_permissions.get("read")):
+		return
+
+	strQuery = """
+	select * from `tabNotification Log`
+	"""
+	conditions = custom_permissions_conditions()
+	if conditions:
+		strQuery += " where " + conditions
+
+	strQuery += " order by modified desc limit {limit}".format(limit = limit)
+
+	return frappe.db.sql(strQuery, as_dict = 1)
+
+def custom_permissions_conditions():
+	doctype_conditions = []
+	c = get_permission_query_conditions(frappe.session.user)
+	if c:
+		doctype_conditions.append(c)
+
+	conditions = ""
+
+	if doctype_conditions:
+		conditions += (" and ".join(doctype_conditions))
+
+	return conditions

@@ -1023,6 +1023,8 @@ class BaseDocument:
 		db_values = frappe.get_doc(self.doctype, self.name).as_dict()
 
 		for key in self.as_dict():
+			if self.doctype == 'Sales Order Item' and self.docstatus == 1 and key == 'ordered_qty':
+				continue
 			df = self.meta.get_field(key)
 			db_value = db_values.get(key)
 
@@ -1043,7 +1045,7 @@ class BaseDocument:
 						seconds=db_value.second,
 						microseconds=db_value.microsecond,
 					)
-				if self_value != db_value:
+				if self_value != db_value and not self.doctype == 'Sales Order' and not self.doctype == 'Sales Order Item' and not self.doctype == 'Sales Taxes and Charges' and not self.doctype == 'Cost':
 					frappe.throw(
 						_("{0} Not allowed to change {1} after submission from {2} to {3}").format(
 							f"Row #{self.idx}:" if self.get("parent") else "",

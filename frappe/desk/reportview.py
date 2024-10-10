@@ -571,6 +571,9 @@ def delete_bulk(doctype, items):
 @frappe.whitelist()
 @frappe.read_only()
 def get_sidebar_stats(stats, doctype, filters=None):
+	if doctype == "Notification Log":
+		return {"stats": None}
+		
 	if filters is None:
 		filters = []
 

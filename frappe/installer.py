@@ -457,6 +457,8 @@ def _delete_modules(modules: list[str], dry_run: bool) -> list[str]:
 def _delete_linked_documents(module_name: str, doctype_linkfield_map: dict[str, str], dry_run: bool) -> None:
 	"""Deleted all records linked with module def"""
 	for doctype, fieldname in doctype_linkfield_map.items():
+		if doctype == "Customizer":
+			continue
 		for record in frappe.get_all(doctype, filters={fieldname: module_name}, pluck="name"):
 			print(f"* removing {doctype} '{record}'...")
 			if not dry_run:
