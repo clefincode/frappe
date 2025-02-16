@@ -196,7 +196,7 @@ export default class GridRow {
 			this.set_docfields(true);
 		}
 
-		if (this.frm && this.doc) {
+		if (this.frm && this.doc && this.doc.doctype) {
 			this.doc = locals[this.doc.doctype][this.doc.name];
 		}
 
