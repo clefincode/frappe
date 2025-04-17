@@ -200,6 +200,7 @@
    "label": "Beta"
   },
   {
+   "allow_bulk_edit": 1,
    "fieldname": "fields",
    "fieldtype": "Table",
    "label": "Fields",
@@ -750,7 +751,7 @@
    "link_fieldname": "reference_doctype"
   }
  ],
- "modified": "2023-12-01 18:37:16.799471",
+ "modified": "2025-03-24 10:43:38.283787",
  "modified_by": "Administrator",
  "module": "Core",
  "name": "DocType",

@@ -1,5 +1,6 @@
 {
  "actions": [],
+ "allow_import": 1,
  "allow_rename": 1,
  "autoname": "Prompt",
  "creation": "2014-07-11 17:18:09.923399",
@@ -291,7 +292,7 @@
  "icon": "fa fa-envelope",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2024-07-04 05:53:40.595130",
+ "modified": "2025-04-07 20:42:20.523374",
  "modified_by": "Administrator",
  "module": "Email",
  "name": "Notification",
