@@ -558,12 +558,12 @@ class User(Document):
 		if old_name in STANDARD_USERS:
 			throw(_("User {0} cannot be renamed").format(self.name))
 
-		# self.validate_email_type(new_name)
+		self.validate_email_type(new_name)
 
-	# def validate_email_type(self, email):
-	# 	from frappe.utils import validate_email_address
+	def validate_email_type(self, email):
+		from frappe.utils import validate_email_address
 
-	# 	validate_email_address(email.strip(), True)
+		validate_email_address(email.strip(), True)
 
 	def after_rename(self, old_name, new_name, merge=False):
 		tables = frappe.db.get_tables()
@@ -959,7 +959,7 @@ def verify_password(password):
 
 
 @frappe.whitelist(allow_guest=True)
-def sign_up(email: str, full_name: str, redirect_to: str ) -> tuple[int, str]:
+def sign_up(email: str, full_name: str, redirect_to: str) -> tuple[int, str]:
 	if is_signup_disabled():
 		frappe.throw(_("Sign Up is disabled"), title=_("Not Allowed"))
 
@@ -1183,8 +1183,8 @@ def throttle_user_creation():
 	if frappe.flags.in_import:
 		return
 
-	# if frappe.db.get_creation_count("User", 60) > frappe.local.conf.get("throttle_user_limit", 60):
-	# 	frappe.throw(_("Throttled"))
+	if frappe.db.get_creation_count("User", 60) > frappe.local.conf.get("throttle_user_limit", 60):
+		frappe.throw(_("Throttled"))
 
 
 @frappe.whitelist()
