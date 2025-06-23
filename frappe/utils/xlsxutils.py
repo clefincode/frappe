@@ -16,7 +16,7 @@ from frappe.utils.html_utils import unescape_html
 ILLEGAL_CHARACTERS_RE = re.compile(r"[\000-\010]|[\013-\014]|[\016-\037]")
 
 
-# return xlsx file object
+# return xlsx file object 
 def make_xlsx(data, sheet_name, wb=None, column_widths=None):
 	column_widths = column_widths or []
 	if wb is None:
@@ -62,7 +62,7 @@ def handle_html(data):
 	if "<" not in data or ">" not in data:
 		return data
 
-	h = unescape_html(data or "")
+	#h = unescape_html(data or "")
 
 	try:
 		value = html2text(h, strip_links=True, wrap=False)

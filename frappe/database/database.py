@@ -885,7 +885,6 @@ class Database:
 		)
 		if isinstance(fields, str) and fields == "*":
 			as_dict = True
-
 		return query.run(as_dict=as_dict, debug=debug, update=update, run=run, pluck=pluck)
 
 	def _get_value_for_many_names(

@@ -1,6 +1,7 @@
 {
  "actions": [],
  "allow_import": 1,
+ "autoname": "prompt",
  "creation": "2012-12-12 11:19:22",
  "default_view": "File",
  "doctype": "DocType",
@@ -190,10 +191,11 @@
  "icon": "fa fa-file",
  "idx": 1,
  "links": [],
- "modified": "2024-05-09 11:46:42.917146",
+ "modified": "2025-03-11 21:56:34.096303",
  "modified_by": "Administrator",
  "module": "Core",
  "name": "File",
+ "naming_rule": "Set by user",
  "owner": "Administrator",
  "permissions": [
   {

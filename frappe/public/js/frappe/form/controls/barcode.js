@@ -5,7 +5,7 @@ frappe.ui.form.ControlBarcode = class ControlBarcode extends frappe.ui.form.Cont
 		// Create the elements for barcode area
 		super.make_wrapper();
 
-		this.default_svg = "<svg height=80></svg>";
+		this.default_svg = "<svg height=28></svg>";
 		let $input_wrapper = this.$wrapper.find(".control-input-wrapper");
 		this.barcode_area = $(`<div class="barcode-wrapper">${this.default_svg}</div>`);
 		this.barcode_area.appendTo($input_wrapper);
