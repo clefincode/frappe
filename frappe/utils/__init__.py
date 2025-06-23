@@ -246,6 +246,7 @@ def validate_url(
 
 def random_string(length: int) -> str:
 	"""generate a random string"""
+	print('generate a random string')
 	import string
 	from random import choice
 

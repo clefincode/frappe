@@ -60,23 +60,23 @@ class Contact(Document):
 		if frappe.db.exists("Contact", self.name):
 			self.name = append_number_if_name_exists("Contact", self.name)
 
-	def validate(self):
-		self.full_name = self._get_full_name()
-		self.set_primary_email()
-		self.set_primary("phone")
-		self.set_primary("mobile_no")
+	# def validate(self):
+	# 	self.full_name = self._get_full_name()
+	# 	self.set_primary_email()
+	# 	self.set_primary("phone")
+	# 	self.set_primary("mobile_no")
 
-		self.set_user()
+	# 	self.set_user()
 
-		set_link_title(self)
+	# 	set_link_title(self)
 
-		if self.email_id and not self.image:
-			self.image = has_gravatar(self.email_id)
+	# 	if self.email_id and not self.image:
+	# 		self.image = has_gravatar(self.email_id)
 
-		if self.get("sync_with_google_contacts") and not self.get("google_contacts"):
-			frappe.throw(_("Select Google Contacts to which contact should be synced."))
+	# 	if self.get("sync_with_google_contacts") and not self.get("google_contacts"):
+	# 		frappe.throw(_("Select Google Contacts to which contact should be synced."))
 
-		deduplicate_dynamic_links(self)
+	# 	deduplicate_dynamic_links(self)
 
 	def set_user(self):
 		if not self.user and self.email_id:
