@@ -76,7 +76,6 @@ class Event(Document):
 		thursday: DF.Check
 		tuesday: DF.Check
 		wednesday: DF.Check
-
 	# end: auto-generated types
 	def validate(self):
 		if not self.starts_on:
