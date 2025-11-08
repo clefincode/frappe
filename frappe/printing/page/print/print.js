@@ -747,6 +747,32 @@ frappe.ui.form.PrintView = class {
 		}
 	}
 
+	////////////walid/////////////
+	///Custom Update
+	refresh_print_options() {
+		let doc = this.frm.doctype;
+		let myPromise = new Promise(function (resolve) {
+			frappe.meta.get_user_print_formats(doc, resolve);
+		});
+		myPromise.then((value) => {
+			///this.print_formats = frappe.meta.get_print_formats(this.frm.doctype);
+			this.print_formats = value;
+			const print_format_select_val = this.print_sel.val();
+			this.print_sel
+				.empty()
+				.add_options([
+					this.get_default_option_for_select(__("Select Print Format")),
+					...this.print_formats,
+				]);
+			return (
+				this.print_formats.includes(print_format_select_val) &&
+				this.print_sel.val(print_format_select_val)
+			);
+		});
+	}
+	///End Custom Update
+	///////////end add////////////////////
+
 	set_default_print_format() {
 		if (
 			frappe.meta

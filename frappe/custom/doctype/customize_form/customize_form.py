@@ -382,9 +382,9 @@ class CustomizeForm(Document):
 			frappe.msgprint(_("You cannot unset 'Read Only' for field {0}").format(df.label))
 			return False
 
-		elif prop == "options" and df.get("fieldtype") not in ALLOWED_OPTIONS_CHANGE:
-			frappe.msgprint(_("You can't set 'Options' for field {0}").format(df.label))
-			return False
+		# elif prop == "options" and df.get("fieldtype") not in ALLOWED_OPTIONS_CHANGE:
+		# 	frappe.msgprint(_("You can't set 'Options' for field {0}").format(df.label))
+		# 	return False
 
 		elif prop == "translatable" and not supports_translation(df.get("fieldtype")):
 			frappe.msgprint(_("You can't set 'Translatable' for field {0}").format(df.label))
