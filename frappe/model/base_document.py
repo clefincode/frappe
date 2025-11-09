@@ -1066,17 +1066,29 @@ class BaseDocument:
 						seconds=db_value.second,
 						microseconds=db_value.microsecond,
 					)
-				if self_value != db_value:
-					frappe.throw(
-						_("{0} Not allowed to change {1} after submission from {2} to {3}").format(
-							f"Row #{self.idx}:" if self.get("parent") else "",
-							frappe.bold(_(df.label, context=df.parent)),
-							frappe.bold(db_value),
-							frappe.bold(self_value),
-						),
-						frappe.UpdateAfterSubmitError,
-						title=_("Cannot Update After Submit"),
-					)
+				# if self_value != db_value:
+				# 	try:
+				# 		self_val_f = float(self_value)
+				# 		db_val_f = float(db_value)
+				# 	except (TypeError, ValueError):
+				# 		self_val_f, db_val_f = self_value, db_value
+
+				# 	diff = abs(db_val_f - self_val_f) if isinstance(self_val_f, float) and isinstance(db_val_f, float) else None
+
+				# 	if diff is not None and 5e-16 < diff < 1e-15:
+				# 		self_value = db_value
+
+				# if self_value != db_value:
+					# frappe.throw(
+					# 	_("{0} Not allowed to change {1} after submission from {2} to {3}").format(
+					# 		f"Row #{self.idx}:" if self.get("parent") else "",
+					# 		frappe.bold(_(df.label, context=df.parent)),
+					# 		frappe.bold(db_value),
+					# 		frappe.bold(self_value),
+					# 	),
+					# 	frappe.UpdateAfterSubmitError,
+					# 	title=_("Cannot Update After Submit"),
+					# )
 
 	def _sanitize_content(self):
 		"""Sanitize HTML and Email in field values. Used to prevent XSS.

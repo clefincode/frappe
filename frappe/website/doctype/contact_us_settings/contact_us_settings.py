@@ -18,10 +18,13 @@ class ContactUsSettings(Document):
 
 		address_line1: DF.Data | None
 		address_line2: DF.Data | None
+		address_line_1_ar: DF.Data | None
 		address_title: DF.Data | None
+		address_title_ar: DF.Data | None
 		city: DF.Data | None
+		city_ar: DF.Data | None
 		country: DF.Data | None
-		disable_contact_us: DF.Check
+		country_ar: DF.Data | None
 		email_id: DF.Data | None
 		forward_to_email: DF.Data | None
 		heading: DF.Data | None
@@ -31,7 +34,6 @@ class ContactUsSettings(Document):
 		query_options: DF.SmallText | None
 		skype: DF.Data | None
 		state: DF.Data | None
-
 	# end: auto-generated types
 	def on_update(self):
 		from frappe.website.utils import clear_cache
