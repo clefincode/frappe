@@ -576,48 +576,63 @@ frappe.search.utils = {
 		];
 	},
 
+//============================ Start Custom For TASK-2025-00188 ===============================
+
 	fuzzy_search: function (keywords = "", _item = "", return_marked_string = false) {
-		const item = __(_item);
+			const translated_item = __(_item) || "";
+			const original_item = _item || "";
+			const candidates = [translated_item, original_item];
+			let best_score = 0;
+			let best_matches = [];
+			let best_item = translated_item;
 
-		const [, score, matches] = fuzzy_match(keywords, item, return_marked_string);
-
-		if (!return_marked_string) {
-			return score;
-		}
-		if (score == 0) {
-			return {
-				score: score,
-				marked_string: item,
-			};
-		}
-
-		// Create Boolean mask to mark matching indices in the item string
-		const matchArray = Array(item.length).fill(0);
-		matches.forEach((index) => (matchArray[index] = 1));
-
-		let marked_string = "";
-		let buffer = "";
-
-		// Clear the buffer and return marked matches.
-		const flushBuffer = () => {
-			if (!buffer) return "";
-			const temp = `<mark>${buffer}</mark>`;
-			buffer = "";
-			return temp;
-		};
-
-		matchArray.forEach((isMatch, index) => {
-			if (isMatch) {
-				buffer += item[index];
-			} else {
-				marked_string += flushBuffer();
-				marked_string += item[index];
+			for (const candidate of candidates) {
+				const [, score, matches] = fuzzy_match(keywords, candidate, return_marked_string);
+				if (score > best_score) {
+					best_score = score;
+					best_matches = matches;
+					best_item = candidate;
+				}
 			}
-		});
-		marked_string += flushBuffer();
 
-		return { score, marked_string };
+			if (!return_marked_string) {
+				return best_score;
+			}
+
+			if (best_score === 0) {
+				return {
+					score: best_score,
+					marked_string: best_item,
+				};
+			}
+
+			const matchArray = Array(best_item.length).fill(0);
+			best_matches.forEach((index) => (matchArray[index] = 1));
+
+			let marked_string = "";
+			let buffer = "";
+
+			const flushBuffer = () => {
+				if (!buffer) return "";
+				const temp = `<mark>${buffer}</mark>`;
+				buffer = "";
+				return temp;
+			};
+
+			matchArray.forEach((isMatch, index) => {
+				if (isMatch) {
+					buffer += best_item[index];
+				} else {
+					marked_string += flushBuffer();
+					marked_string += best_item[index];
+				}
+			});
+			marked_string += flushBuffer();
+
+			return { score: best_score, marked_string };
 	},
+
+//============================ End Custom For TASK-2025-00188 =================================
 
 	bolden_match_part: function (str, subseq) {
 		if (fuzzy_match(subseq, str)[0] === false) {
