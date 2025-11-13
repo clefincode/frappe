@@ -6,6 +6,60 @@ frappe.search.utils = {
 		this.recent = JSON.parse(frappe.boot.user.recent || "[]") || [];
 	},
 
+    fuzzy_search: function (keywords = "", _item = "", return_marked_string = false) {
+        const translated_item = __(_item) || "";
+        const original_item = _item || "";
+        const candidates = [translated_item, original_item];
+        let best_score = 0;
+        let best_matches = [];
+        let best_item = translated_item;
+
+        for (const candidate of candidates) {
+            const [, score, matches] = fuzzy_match(keywords, candidate, return_marked_string);
+            if (score > best_score) {
+                best_score = score;
+                best_matches = matches;
+                best_item = candidate;
+            }
+        }
+
+        if (!return_marked_string) {
+            return best_score;
+        }
+
+        if (best_score === 0) {
+            return {
+                score: best_score,
+                marked_string: best_item,
+            };
+        }
+
+        const matchArray = Array(best_item.length).fill(0);
+        best_matches.forEach((index) => (matchArray[index] = 1));
+
+        let marked_string = "";
+        let buffer = "";
+
+        const flushBuffer = () => {
+            if (!buffer) return "";
+            const temp = `<mark>${buffer}</mark>`;
+            buffer = "";
+            return temp;
+        };
+
+        matchArray.forEach((isMatch, index) => {
+            if (isMatch) {
+                buffer += best_item[index];
+            } else {
+                marked_string += flushBuffer();
+                marked_string += best_item[index];
+            }
+        });
+        marked_string += flushBuffer();
+
+        return { score: best_score, marked_string };
+    },
+
 	get_recent_pages: function (keywords) {
 		if (keywords === null) keywords = "";
 		var me = this,
@@ -574,46 +628,6 @@ frappe.search.utils = {
 				results: sort_uniques(this.get_search_in_list(keywords)),
 			},
 		];
-	},
-
-	fuzzy_search: function (keywords = "", _item = "", return_marked_string = false) {
-		const item = __(_item);
-
-		const [, score, matches] = fuzzy_match(keywords, item, return_marked_string);
-
-		if (!return_marked_string) {
-			return score;
-		}
-		if (score == 0) {
-			return { score, item };
-		}
-
-		// Create Boolean mask to mark matching indices in the item string
-		const matchArray = Array(item.length).fill(0);
-		matches.forEach((index) => (matchArray[index] = 1));
-
-		let marked_string = "";
-		let buffer = "";
-
-		// Clear the buffer and return marked matches.
-		const flushBuffer = () => {
-			if (!buffer) return "";
-			const temp = `<mark>${buffer}</mark>`;
-			buffer = "";
-			return temp;
-		};
-
-		matchArray.forEach((isMatch, index) => {
-			if (isMatch) {
-				buffer += item[index];
-			} else {
-				marked_string += flushBuffer();
-				marked_string += item[index];
-			}
-		});
-		marked_string += flushBuffer();
-
-		return { score, marked_string };
 	},
 
 	bolden_match_part: function (str, subseq) {
