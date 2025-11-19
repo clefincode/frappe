@@ -505,6 +505,57 @@ frappe.ui.form.PrintView = class {
 	printit() {
 		let me = this;
 
+//============================ Start Custom For TASK-2025-00241 ===============================
+    frappe.call({
+        method: "iron_sector.api.print_control.track_print",
+        args: {
+            doctype: me.frm.doc.doctype,
+            name: me.frm.doc.name
+        },
+        callback: function(r) {
+            if (r.message && r.message.success) {
+                const print_status = r.message;
+                if (print_status.requires_warning) {
+                    frappe.confirm(
+                        __('This document can only be printed once. After the first print, all subsequent prints will be marked as "Copy of Original". Do you want to continue?'),
+                        function() {
+                            me.execute_print(print_status);
+                        },
+                        function() {
+                            frappe.show_alert({
+                                message: __('Print cancelled'),
+                                indicator: 'info'
+                            }, 5);
+                        }
+                    );
+                } else {
+                    me.execute_print(print_status);
+                }
+            } else {
+
+                frappe.show_alert({
+                    message: __('Print tracking error. Proceeding with normal print.'),
+                    indicator: 'orange'
+                }, 5);
+                me.execute_print({is_copy: false});
+            }
+        }
+    });
+}
+
+execute_print(print_status) {
+		let me = this;
+		if (print_status.requires_warning) {
+			frappe.call({
+				method: "iron_sector.api.print_control.mark_as_printed",
+				args: {
+					doctype: me.frm.doc.doctype,
+					name: me.frm.doc.name
+				}
+			});
+		}
+		me.is_copy_print = print_status.is_copy || false;
+//============================ End Custom For TASK-2025-00241 ===============================
 		if (cint(me.print_settings.enable_print_server)) {
 			if (localStorage.getItem("network_printer")) {
 				me.print_by_server();
@@ -555,10 +606,42 @@ frappe.ui.form.PrintView = class {
 			);
 			me.printer_setting_dialog();
 		} else {
-			me.render_page("/printview?", true);
+			//============================ Start Custom For TASK-2025-00241 ===============================
+			me.render_page_with_watermark();
 		}
 	}
 
+render_page_with_watermark() {
+    let me = this;
+    
+    if (me.is_copy_print) {
+   
+        frappe.call({
+            method: "iron_sector.api.print_control.get_print_html_with_watermark",
+            args: {
+                doctype: me.frm.doc.doctype,
+                name: me.frm.doc.name,
+                print_format: me.selected_format() || undefined,
+                no_letterhead: me.with_letterhead ? 0 : 1
+            },
+            callback: function(r) {
+                if (r.message) {
+              
+                    const print_window = window.open('', '_blank');
+                    print_window.document.write(r.message);
+                    print_window.document.close();
+                
+                    print_window.onload = function() {
+                        print_window.print();
+                    };
+                }
+            }
+        });
+    } else {
+        me.render_page("/printview?", true);
+    }
+}
+//============================ End Custom For TASK-2025-00241 ===============================
 	print_by_server() {
 		let me = this;
 		if (localStorage.getItem("network_printer")) {
@@ -625,25 +708,92 @@ frappe.ui.form.PrintView = class {
 		});
 	}
 	render_pdf() {
-		let print_format = this.get_print_format();
-		if (print_format.print_format_builder_beta) {
-			let params = new URLSearchParams({
-				doctype: this.frm.doc.doctype,
-				name: this.frm.doc.name,
-				print_format: print_format.name,
-				letterhead: this.get_letterhead(),
-			});
-			let w = window.open(`/api/method/frappe.utils.weasyprint.download_pdf?${params}`);
-			if (!w) {
-				frappe.msgprint(__("Please enable pop-ups"));
-				return;
-			}
-		} else {
-			this.is_wkhtmltopdf_valid();
-			this.render_page("/api/method/frappe.utils.print_format.download_pdf?");
-		}
-	}
+		//============================ Start Custom For TASK-2025-00241 ===============================
+	let me = this;
+    frappe.call({
+        method: "iron_sector.api.print_control.track_print",
+        args: {
+            doctype: me.frm.doc.doctype,
+            name: me.frm.doc.name
+        },
+        callback: function(r) {
+            if (r.message && r.message.success) {
+                const print_status = r.message;
+                if (print_status.requires_warning) {
+                    frappe.confirm(
+                        __('This document can only be printed once. After the first print, all subsequent prints will be marked as "Copy of Original". Do you want to continue?'),
+                        function() {
+                            me.execute_render_pdf(print_status);
+                        },
+                        function() {
+                            frappe.show_alert({
+                                message: __('PDF generation cancelled'),
+                                indicator: 'info'
+                            }, 5);
+                        }
+                    );
+                } else {
+                    me.execute_render_pdf(print_status);
+                }
+            } else {
+                frappe.show_alert({
+                    message: __('Print tracking error. Proceeding with PDF generation.'),
+                    indicator: 'orange'
+                }, 5);
+                me.execute_render_pdf({is_copy: false});
+            }
+        }
+    });
+}
 
+execute_render_pdf(print_status) {
+    let me = this;
+    if (print_status.requires_warning) {
+        frappe.call({
+            method: "iron_sector.api.print_control.mark_as_printed",
+            args: {
+                doctype: me.frm.doc.doctype,
+                name: me.frm.doc.name
+            }
+        });
+    }
+    me.is_copy_print = print_status.is_copy || false;
+
+    
+    if (me.is_copy_print) {
+        let print_format = me.selected_format() || me.get_print_format().name;
+        let params = new URLSearchParams({
+            doctype: me.frm.doc.doctype,
+            name: me.frm.doc.name,
+            print_format: print_format,
+            letterhead: me.get_letterhead(),
+            no_letterhead: me.with_letterhead ? 0 : 1
+        });
+        
+        let w = window.open(`/api/method/iron_sector.api.print_control.view_pdf_with_watermark?${params}`);
+        if (!w) {
+            frappe.msgprint(__("Please enable pop-ups"));
+        }
+    } else {
+        let print_format = me.get_print_format();
+        if (print_format.print_format_builder_beta) {
+            let params = new URLSearchParams({
+                doctype: me.frm.doc.doctype,
+                name: me.frm.doc.name,
+                print_format: print_format.name,
+                letterhead: me.get_letterhead(),
+            });
+            let w = window.open(`/api/method/frappe.utils.weasyprint.download_pdf?${params}`);
+            if (!w) {
+                frappe.msgprint(__("Please enable pop-ups"));
+            }
+        } else {
+            me.is_wkhtmltopdf_valid();
+            me.render_page("/api/method/frappe.utils.print_format.download_pdf?", true);
+        }
+    }
+}
+//============================ End Custom For TASK-2025-00241 ===============================
 	render_page(method, printit = false) {
 		let w = window.open(
 			frappe.urllib.get_full_url(
