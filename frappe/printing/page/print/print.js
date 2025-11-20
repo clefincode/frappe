@@ -507,7 +507,7 @@ frappe.ui.form.PrintView = class {
 
 //============================ Start Custom For TASK-2025-00241 ===============================
     frappe.call({
-        method: "iron_sector.api.print_control.track_print",
+        method: "iron_sector.www.api.api.track_print",
         args: {
             doctype: me.frm.doc.doctype,
             name: me.frm.doc.name
@@ -547,7 +547,7 @@ execute_print(print_status) {
 		let me = this;
 		if (print_status.requires_warning) {
 			frappe.call({
-				method: "iron_sector.api.print_control.mark_as_printed",
+				method: "iron_sector.www.api.api.mark_as_printed",
 				args: {
 					doctype: me.frm.doc.doctype,
 					name: me.frm.doc.name
@@ -617,7 +617,7 @@ render_page_with_watermark() {
     if (me.is_copy_print) {
    
         frappe.call({
-            method: "iron_sector.api.print_control.get_print_html_with_watermark",
+            method: "iron_sector.www.api.api.get_print_html_with_watermark",
             args: {
                 doctype: me.frm.doc.doctype,
                 name: me.frm.doc.name,
@@ -711,7 +711,7 @@ render_page_with_watermark() {
 		//============================ Start Custom For TASK-2025-00241 ===============================
 	let me = this;
     frappe.call({
-        method: "iron_sector.api.print_control.track_print",
+        method: "iron_sector.www.api.api.track_print",
         args: {
             doctype: me.frm.doc.doctype,
             name: me.frm.doc.name
@@ -750,7 +750,7 @@ execute_render_pdf(print_status) {
     let me = this;
     if (print_status.requires_warning) {
         frappe.call({
-            method: "iron_sector.api.print_control.mark_as_printed",
+            method: "iron_sector.www.api.api.mark_as_printed",
             args: {
                 doctype: me.frm.doc.doctype,
                 name: me.frm.doc.name
@@ -770,7 +770,7 @@ execute_render_pdf(print_status) {
             no_letterhead: me.with_letterhead ? 0 : 1
         });
         
-        let w = window.open(`/api/method/iron_sector.api.print_control.view_pdf_with_watermark?${params}`);
+        let w = window.open(`/api/method/iron_sector.www.api.api.view_pdf_with_watermark?${params}`);
         if (!w) {
             frappe.msgprint(__("Please enable pop-ups"));
         }
