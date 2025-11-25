@@ -30,10 +30,82 @@ def get():
 	if is_virtual_doctype(args.doctype):
 		controller = get_controller(args.doctype)
 		data = compress(controller.get_list(args))
-	else:
-		data = compress(execute(**args), args=args)
+#============================ Start Custom For TASK-2025-00256 ===============================
+		return data
+
+	if args.doctype == "Supplier Quotation":
+
+		if args.filters:
+			if not isinstance(args.filters, list):
+					args.filters = []
+
+
+			args.filters.append([
+					"Supplier Quotation",
+					"name",
+					"in",
+					frappe.db.sql_list("""
+						SELECT sqi.parent
+						FROM `tabSupplier Quotation Item` sqi
+						LEFT JOIN `tabRequest for Quotation` rfq
+							ON rfq.name = sqi.request_for_quotation
+						WHERE rfq.custom_submission_deadline IS NOT NULL
+							AND rfq.custom_submission_deadline <= CURDATE()
+					""")
+			])
+
+
+		raw_data = execute(**args)
+
+		sensitive_fields = {
+			"grand_total",
+			"base_grand_total",
+			"total",
+			"net_total",
+			"discount_amount",
+			"rounded_total",
+			"rounding_adjustment",
+			"total_taxes_and_charges",
+		}
+
+		today = frappe.utils.getdate(frappe.utils.nowdate())
+
+		for row in raw_data:
+			sq_name = row.get("name")
+			if not sq_name:
+					continue
+
+			# Find related RFQ for this SQ
+			rfq_deadline = frappe.db.sql("""
+					SELECT rfq.custom_submission_deadline
+					FROM `tabSupplier Quotation Item` sqi
+					JOIN `tabRequest for Quotation` rfq
+						ON rfq.name = sqi.request_for_quotation
+					WHERE sqi.parent = %s
+					LIMIT 1
+			""", sq_name)
+
+			if rfq_deadline and rfq_deadline[0][0]:
+					deadline = frappe.utils.getdate(rfq_deadline[0][0])
+
+					if today < deadline:
+						for f in sensitive_fields:
+							if f in row:
+									row[f] = None 
+						for key in row:
+
+							if key.startswith("Supplier Quotation Item:"):
+
+								row[key] = None
+
+		data = compress(raw_data, args=args)
+		return data
+
+
+	data = compress(execute(**args), args=args)
 	return data
 
+#============================ End Custom For TASK-2025-00256 ===============================
 
 @frappe.whitelist()
 @frappe.read_only()
