@@ -86,7 +86,7 @@ window.comment_when = function (datetime, mini) {
 		'" title="' +
 		timestamp +
 		'">' +
-		prettyDate(datetime, mini) +
+		timestamp +
 		"</span>"
 	);
 };
@@ -101,6 +101,6 @@ frappe.datetime.refresh_when = function () {
 	}
 };
 
-setInterval(function () {
-	frappe.datetime.refresh_when();
-}, 60000); // refresh every minute
+// setInterval(function () {
+// 	frappe.datetime.refresh_when();
+// }, 60000); // refresh every minute

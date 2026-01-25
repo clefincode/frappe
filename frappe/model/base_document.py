@@ -557,6 +557,7 @@ class BaseDocument:
 				),
 				list(d.values()),
 			)
+		
 		except Exception as e:
 			if frappe.db.is_primary_key_violation(e):
 				if self.meta.autoname == "hash":
@@ -567,6 +568,7 @@ class BaseDocument:
 					self.name = None
 					self.db_insert()
 					return
+				frappe.log_error(message=str(self.as_dict()),title="self")
 
 				if not ignore_if_duplicate:
 					frappe.msgprint(

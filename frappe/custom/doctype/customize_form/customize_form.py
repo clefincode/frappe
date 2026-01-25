@@ -44,7 +44,7 @@ class CustomizeForm(Document):
 		autoname: DF.Data | None
 		default_email_template: DF.Link | None
 		default_print_format: DF.Link | None
-		default_view: DF.Literal[None]
+		default_view: DF.LiteralNone
 		doc_type: DF.Link | None
 		editable_grid: DF.Check
 		email_append_to: DF.Check
@@ -57,16 +57,7 @@ class CustomizeForm(Document):
 		links: DF.Table[DocTypeLink]
 		make_attachments_public: DF.Check
 		max_attachments: DF.Int
-		naming_rule: DF.Literal[
-			"",
-			"Set by user",
-			"By fieldname",
-			'By "Naming Series" field',
-			"Expression",
-			"Expression (old style)",
-			"Random",
-			"By script",
-		]
+		naming_rule: DF.Literal["", "Set by user", "By fieldname", "By \"Naming Series\" field", "Expression", "Expression (old style)", "Random", "By script"]
 		queue_in_background: DF.Check
 		quick_entry: DF.Check
 		search_fields: DF.Data | None
@@ -74,7 +65,7 @@ class CustomizeForm(Document):
 		sender_name_field: DF.Data | None
 		show_preview_popup: DF.Check
 		show_title_field_in_link: DF.Check
-		sort_field: DF.Literal[None]
+		sort_field: DF.LiteralNone
 		sort_order: DF.Literal["ASC", "DESC"]
 		states: DF.Table[DocTypeState]
 		subject_field: DF.Data | None

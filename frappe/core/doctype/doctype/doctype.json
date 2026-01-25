@@ -673,6 +673,7 @@
  "icon": "fa fa-bolt",
  "idx": 6,
  "index_web_pages_for_search": 1,
+ "is_calendar_and_gantt": 1,
  "links": [
   {
    "group": "Views",
@@ -750,7 +751,7 @@
    "link_fieldname": "reference_doctype"
   }
  ],
- "modified": "2023-12-01 18:37:16.799471",
+ "modified": "2024-07-02 13:53:37.662752",
  "modified_by": "Administrator",
  "module": "Core",
  "name": "DocType",

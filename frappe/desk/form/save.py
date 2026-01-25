@@ -36,6 +36,9 @@ def savedocs(doc, action):
 			return
 		doc.submit()
 	else:
+		if doc.doctype == 'Asset':
+
+			frappe.log_error(message=str(doc.as_dict()), title='saved object')
 		doc.save()
 
 	# update recent documents
@@ -43,6 +46,7 @@ def savedocs(doc, action):
 	send_updated_docs(doc)
 
 	add_data_to_monitor(doctype=doc.doctype, action=action)
+
 	frappe.msgprint(frappe._("Saved"), indicator="green", alert=True)
 
 
