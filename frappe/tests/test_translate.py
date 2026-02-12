@@ -132,7 +132,7 @@ class TestTranslate(FrappeTestCase):
 		Case 2: frappe.form_dict._lang is not set, but preferred_language cookie is
 		"""
 
-		with patch.object(frappe.translate, "get_preferred_language_cookie", return_value="fr"):
+		with patch.object(frappe.translate, "get__cookie", return_value="fr"):
 			set_request(method="POST", path="/", headers=[("Accept-Language", "hr")])
 			return_val = get_language()
 			# system default language

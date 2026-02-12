@@ -1631,7 +1631,7 @@ def get_url(
 				host_name = "http://127.0.0.1"
 
 	if host_name and not (host_name.startswith("http://") or host_name.startswith("https://")):
-		host_name = "http://" + host_name
+		host_name = "https://" + host_name
 
 	if not uri and full_address:
 		uri = frappe.get_request_header("REQUEST_URI", "")

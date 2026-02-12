@@ -26,7 +26,9 @@ def validate_route_conflict(doctype, name):
 
 
 def slug(name):
-	return name.lower().replace(" ", "-")
+	if name:
+		return name.lower().replace(" ", "-")
+	return ''
 
 
 def pop_csv_params(form_dict):

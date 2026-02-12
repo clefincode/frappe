@@ -930,7 +930,8 @@ def _get_user_for_update_password(key, old_password):
 	# verify old password
 	result = frappe._dict()
 	if key:
-		hashed_key = sha256_hash(key)
+		#hashed_key = sha256_hash(key)
+		hashed_key = key
 		user = frappe.db.get_value(
 			"User", {"reset_password_key": hashed_key}, ["name", "last_reset_password_key_generated_on"]
 		)

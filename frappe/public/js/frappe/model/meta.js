@@ -336,4 +336,37 @@ $.extend(frappe.meta, {
 		}
 		return precision;
 	},
+
+	/// Custom Update walid
+	get_user_print_formats: function (doctype, resolve) {
+		var print_format_list = ["Standard"];
+		var default_print_format = locals.DocType[doctype].default_print_format;
+		let enable_raw_printing = frappe.model.get_doc(":Print Settings", "Print Settings").enable_raw_printing;
+		frappe.call({
+			type: "GET",
+			method: "frappe.client.get_list",
+			no_spinner: true,
+			args: {
+				doctype: "Print Format",
+				filters: { "doc_type": doctype }
+			},
+			callback: function (r) {
+				if (r) {
+					for (var i = 0; i < r.message.length; i++) {
+						var format = (r.message[i]['name'])
+						if (enable_raw_printing) {
+							print_format_list.push(format)
+						}
+					}
+				}
+				if (default_print_format && default_print_format != "Standard") {
+					var index = print_format_list.indexOf(default_print_format);
+					print_format_list.splice(index, 1).sort();
+					print_format_list.unshift(default_print_format);
+				}
+				resolve(print_format_list);
+			}
+		});
+	}
+	/// End Custom Update
 });

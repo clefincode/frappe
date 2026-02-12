@@ -1259,15 +1259,41 @@ class BaseDocument:
 
 	def reset_values_if_no_permlevel_access(self, has_access_to, high_permlevel_fields):
 		"""If the user does not have permissions at permlevel > 0, then reset the values to original / default"""
-		to_reset = [
-			df
-			for df in high_permlevel_fields
-			if (
-				df.permlevel not in has_access_to
-				and df.fieldtype not in display_fieldtypes
-				and df.fieldname not in self.flags.get("ignore_permlevel_for_fields", [])
-			)
-		]
+		# to_reset = [
+		# 	df
+		# 	for df in high_permlevel_fields
+		# 	if (
+		# 		df.permlevel not in has_access_to
+		# 		and df.fieldtype not in display_fieldtypes
+		# 		and df.fieldname not in self.flags.get("ignore_permlevel_for_fields", [])
+		# 	)
+		# ]
+		# to_reset = [
+		# 	df
+		# 	for df in high_permlevel_fields
+		# 	if (
+		# 		df.permlevel not in has_access_to
+		# 		and df.fieldtype not in display_fieldtypes
+		# 		and df.fieldname not in self.flags.get("ignore_permlevel_for_fields", [])
+		# 	)
+		# 	#   walid
+		# 	#	if df.permlevel not in has_access_to and df.fieldtype not in display_fieldtypes:
+		# 	#	to_reset.append(df)
+
+		# ]
+
+		to_reset = []
+		for df in high_permlevel_fields:
+			###Custom Update to prevent resetting item code in Item Doctype
+			forcheck = True
+			if df.fieldname == 'item_code' and self.doctype == 'Item':
+				if self.get('item_code'):
+					forcheck = False
+
+			if df.permlevel not in has_access_to and df.fieldtype not in display_fieldtypes and forcheck:
+				to_reset.append(df)
+			###End Custom Update
+
 
 		if to_reset:
 			if self.is_new():

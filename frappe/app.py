@@ -512,6 +512,7 @@ def serve(
 		use_debugger=not in_test_env,
 		use_evalex=not in_test_env,
 		threaded=not no_threading,
+		reloader_type='stat'
 	)
 
 

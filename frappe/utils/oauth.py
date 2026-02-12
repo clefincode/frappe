@@ -307,6 +307,7 @@ def update_oauth_user(user: str, data: dict, provider: str):
 				user.set_social_login_userid(provider, userid=data["id"], username=data.get("username"))
 				user.update({"user_image": f"https://graph.facebook.com/{data['id']}/picture"})
 			case "google":
+				user.verified=1
 				user.set_social_login_userid(provider, userid=data["id"])
 			case "github":
 				user.set_social_login_userid(provider, userid=data["id"], username=data.get("login"))

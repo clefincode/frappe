@@ -9,6 +9,7 @@
  "field_order": [
   "user_details_tab",
   "enabled",
+  "verified",
   "section_break_3",
   "email",
   "first_name",
@@ -734,6 +735,13 @@
    "fieldtype": "Section Break",
    "label": "Workspace"
   },
+  {
+   "default": "0",
+   "fieldname": "verified",
+   "fieldtype": "Check",
+   "label": "Verified"
+  },
+  
   {
    "collapsible": 1,
    "fieldname": "app_section",
