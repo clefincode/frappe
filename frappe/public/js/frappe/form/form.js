@@ -1414,8 +1414,21 @@ frappe.ui.form.Form = class FrappeForm {
 	//Remove specific custom button by button Label
 	remove_custom_button(label, group) {
 		this.page.remove_inner_button(label, group);
-	}
 
+		// Remove actions from menu
+		delete this.custom_buttons[label];
+	let menu_item_label = group ? `${group} > ${label}` : label;
+		let $linkBody = this.page.is_in_group_button_dropdown(
+		this.page.menu, "li > a.grey-link > span", menu_item_label
+		).parent().parent();
+
+		if ($linkBody) {
+	// If last button, remove divider too
+		let $divider =  $linkBody.next('.dropdown-divider');
+		if ($divider) $divider.remove();
+		$linkBody.remove();
+		}
+	}
 	scroll_to_element() {
 		if (frappe.route_options && frappe.route_options.scroll_to) {
 			var scroll_to = frappe.route_options.scroll_to;
