@@ -363,6 +363,8 @@ class NotificationsView extends BaseNotificationsView {
 		frappe.realtime.on("notification", () => {
 			this.toggle_notification_icon(false);
 			this.update_dropdown();
+			var audio = new Audio('/files/Sound 01.mp3');  
+        	audio.play().catch(err => console.log("Audio play failed:", err));
 		});
 
 		frappe.realtime.on("indicator_hide", () => {
