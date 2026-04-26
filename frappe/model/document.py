@@ -207,6 +207,49 @@ class Document(BaseDocument):
 			self.set(df.fieldname, children)
 
 		# sometimes __setup__ can depend on child values, hence calling again at the end
+#============================== Start Custom for TASK-2026-00251==============================
+		if frappe.session.user in ("Administrator", "Guest"):
+			return self
+
+		employee_company = frappe.db.get_value(
+			"Employee",
+			{"user_id": frappe.session.user},
+			"company"
+		)
+
+		if not employee_company:
+			return self
+
+		has_company_field = self.meta.has_field("company")
+
+		has_company_in_children = any(
+			frappe.get_meta(df.options).has_field("company")
+			for df in self._get_table_fields()
+		)
+
+		if not has_company_field and not has_company_in_children:
+			return self
+
+		if hasattr(self, "company") and self.company:
+			if self.company != employee_company:
+				pass  
+
+		for df in self._get_table_fields():
+			rows = self.get(df.fieldname)
+
+			if not rows:
+				continue
+
+			if not hasattr(rows[0], "company"):
+				continue
+
+			filtered = [
+				row for row in rows
+				if getattr(row, "company", None) == employee_company
+			]
+
+			self.set(df.fieldname, filtered)
+#============================== End Custom for TASK-2026-00251==============================
 		if hasattr(self, "__setup__"):
 			self.__setup__()
 
