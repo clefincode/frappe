@@ -208,47 +208,58 @@ class Document(BaseDocument):
 
 		# sometimes __setup__ can depend on child values, hence calling again at the end
 #============================== Start Custom for TASK-2026-00251==============================
-		if frappe.session.user in ("Administrator", "Guest"):
-			return self
-
-		employee_company = frappe.db.get_value(
-			"Employee",
-			{"user_id": frappe.session.user},
-			"company"
+		# Do not run this while metadata documents are being loaded. Calling
+		# self.meta or frappe.get_meta() here for Meta/DocType documents recurses
+		# back into Document.load_from_db().
+		skip_company_filter = (
+			getattr(self, "_metaclass", False)
+			or self.doctype
+			in {
+				"DocType",
+				"DocField",
+				"DocPerm",
+				"DocType Action",
+				"DocType Link",
+				"DocType State",
+			}
+			or frappe.session.user in ("Administrator", "Guest")
 		)
 
-		if not employee_company:
-			return self
+		if not skip_company_filter:
+			employee_company = frappe.db.get_value(
+				"Employee",
+				{"user_id": frappe.session.user},
+				"company",
+			)
 
-		has_company_field = self.meta.has_field("company")
+			if employee_company:
+				table_fields = self._get_table_fields()
+				has_company_field = self.meta.has_field("company")
+				has_company_in_children = any(
+					df.options and frappe.get_meta(df.options).has_field("company")
+					for df in table_fields
+				)
 
-		has_company_in_children = any(
-			frappe.get_meta(df.options).has_field("company")
-			for df in self._get_table_fields()
-		)
+				if has_company_field or has_company_in_children:
+					if hasattr(self, "company") and self.company:
+						if self.company != employee_company:
+							pass
 
-		if not has_company_field and not has_company_in_children:
-			return self
+					for df in table_fields:
+						rows = self.get(df.fieldname)
 
-		if hasattr(self, "company") and self.company:
-			if self.company != employee_company:
-				pass  
+						if not rows:
+							continue
 
-		for df in self._get_table_fields():
-			rows = self.get(df.fieldname)
+						if not hasattr(rows[0], "company"):
+							continue
 
-			if not rows:
-				continue
+						filtered = [
+							row for row in rows
+							if getattr(row, "company", None) == employee_company
+						]
 
-			if not hasattr(rows[0], "company"):
-				continue
-
-			filtered = [
-				row for row in rows
-				if getattr(row, "company", None) == employee_company
-			]
-
-			self.set(df.fieldname, filtered)
+						self.set(df.fieldname, filtered)
 #============================== End Custom for TASK-2026-00251==============================
 		if hasattr(self, "__setup__"):
 			self.__setup__()

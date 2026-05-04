@@ -35,37 +35,48 @@ def get():
 
 	if args.doctype == "Supplier Quotation":
 
-		if args.filters:
-			if not isinstance(args.filters, list):
-					args.filters = []
-
-
-			args.filters.append([
-					"Supplier Quotation",
-					"name",
-					"in",
-					frappe.db.sql_list("""
-						SELECT sqi.parent
-						FROM `tabSupplier Quotation Item` sqi
-						LEFT JOIN `tabRequest for Quotation` rfq
-							ON rfq.name = sqi.request_for_quotation
-						WHERE rfq.custom_submission_deadline IS NOT NULL
-							AND rfq.custom_submission_deadline <= CURDATE()
-					""")
-			])
-
+		
 
 		raw_data = execute(**args)
 
 		sensitive_fields = {
+
 			"grand_total",
+
 			"base_grand_total",
+
 			"total",
+
 			"net_total",
+
 			"discount_amount",
+
 			"rounded_total",
+
 			"rounding_adjustment",
+
 			"total_taxes_and_charges",
+
+			"rate",
+
+			"amount",
+
+			"net_rate",
+
+			"base_net_rate",
+
+			"base_net_amount",
+
+			"net_amount",
+
+			"base_rate",
+
+			"base_price_list_rate",
+
+			"price_list_rate",
+
+			"base_amount",
+
 		}
 
 		today = frappe.utils.getdate(frappe.utils.nowdate())
@@ -73,30 +84,27 @@ def get():
 		for row in raw_data:
 			sq_name = row.get("name")
 			if not sq_name:
-					continue
+				continue
 
-			# Find related RFQ for this SQ
 			rfq_deadline = frappe.db.sql("""
-					SELECT rfq.custom_submission_deadline
+					SELECT rfq.custom_submission_deadline, rfq.custom_is_rfq_completed
 					FROM `tabSupplier Quotation Item` sqi
 					JOIN `tabRequest for Quotation` rfq
 						ON rfq.name = sqi.request_for_quotation
 					WHERE sqi.parent = %s
 					LIMIT 1
-			""", sq_name)
+				""", sq_name)
 
-			if rfq_deadline and rfq_deadline[0][0]:
-					deadline = frappe.utils.getdate(rfq_deadline[0][0])
+			if rfq_deadline and rfq_deadline[0][0] or rfq_deadline and cint(rfq_deadline[0][1]) == 0:
+				deadline = frappe.utils.getdate(rfq_deadline[0][0])
 
-					if today < deadline:
-						for f in sensitive_fields:
-							if f in row:
-									row[f] = None 
-						for key in row:
-
-							if key.startswith("Supplier Quotation Item:"):
-
-								row[key] = None
+				if today < deadline:
+					for f in sensitive_fields:
+						if f in row:
+							row[f] = None
+					for key in row:
+						if key.startswith("Supplier Quotation Item:"):
+							row[key] = None
 
 		data = compress(raw_data, args=args)
 		return data
