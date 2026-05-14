@@ -859,6 +859,11 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
 					this.add_chart_buttons_to_toolbar(false);
 					this.toggle_print_buttons(false);
 				}
+                //============================ Start Custom For TASK-2025-00199 ===============================
+
+                this.reposition_custom_sections();
+
+                //============================ Start Custom For TASK-2025-00199 ===============================
 
 				this.show_footer_message();
 				frappe.hide_progress();
@@ -2395,6 +2400,35 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
 			return items;
 		}, []);
 	}
+
+//============================ Start Custom For TASK-2025-00199 ===============================
+
+    reposition_custom_sections() {
+        if (!this.page || !this.page.main) return;
+        let $blocks = this.page.main.find("[data-ownership-summary]");
+        if (!$blocks.length) return;
+
+        if ($blocks.length > 1) {
+            $blocks.slice(0, -1).remove();
+            $blocks = this.page.main.find("[data-ownership-summary]");
+        }
+
+        const $block = $blocks.last();
+
+        const chart_ready =
+            this.$chart && this.$chart.length && this.$chart.is(":visible") && this.$chart.children().length;
+
+        if (chart_ready) {
+            this.$chart.append($block);
+        } else if (this.$report && this.$report.length) {
+            this.$report.before($block);
+        } else {
+            return;
+        }
+
+        $block.css("display", "block");
+    }
+//============================ End Custom For TASK-2025-00199 =================================
 
 	// backward compatibility
 	get get_values() {
