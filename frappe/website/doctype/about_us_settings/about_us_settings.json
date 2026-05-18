@@ -8,6 +8,7 @@
  "field_order": [
   "page_title",
   "company_introduction",
+  "company_introduction_ar",
   "sb0",
   "company_history_heading",
   "company_history",
@@ -75,14 +76,22 @@
    "fieldname": "team_members_subtitle",
    "fieldtype": "Small Text",
    "label": "Team Members Subtitle"
+  },
+  {
+   "description": "Introduce your company to the website visitor.",
+   "fieldname": "company_introduction_ar",
+   "fieldtype": "Text Editor",
+   "in_list_view": 1,
+   "label": "Company Introduction Ar"
   }
  ],
+ "grid_page_length": 50,
  "icon": "fa fa-group",
  "idx": 1,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2020-10-12 13:26:20.277859",
+ "modified": "2025-11-06 13:11:09.687943",
  "modified_by": "Administrator",
  "module": "Website",
  "name": "About Us Settings",
@@ -98,7 +107,9 @@
    "write": 1
   }
  ],
+ "row_format": "Dynamic",
  "sort_field": "modified",
  "sort_order": "DESC",
+ "states": [],
  "track_changes": 1
 }

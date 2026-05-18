@@ -9,6 +9,7 @@
  "field_order": [
   "user_details_tab",
   "enabled",
+  "is_verified",
   "section_break_3",
   "email",
   "first_name",
@@ -744,8 +745,7 @@
    "description": "Redirect to the selected app after login",
    "fieldname": "default_app",
    "fieldtype": "Select",
-   "label": "Default App",
-   "options": ""
+   "label": "Default App"
   },
   {
    "collapsible": 1,
@@ -812,6 +812,12 @@
    "fieldname": "dashboard",
    "fieldtype": "Check",
    "label": "Dashboard"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_verified",
+   "fieldtype": "Check",
+   "label": "Is Verified"
   }
  ],
  "icon": "fa fa-user",
@@ -875,7 +881,7 @@
   }
  ],
  "make_attachments_public": 1,
- "modified": "2025-05-21 14:57:24.333141",
+ "modified": "2025-11-02 15:36:50.013703",
  "modified_by": "Administrator",
  "module": "Core",
  "name": "User",
