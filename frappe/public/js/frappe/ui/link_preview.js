@@ -129,18 +129,139 @@ frappe.ui.LinkPreview = class {
 	clear_all_popovers() {
 		this.popovers_list.forEach(($el) => $el.hide());
 	}
-
+//============================ Start Custom for Stock Reservation and Availability Display ===============================
 	get_preview_data() {
-		return frappe.xcall(
-			"frappe.desk.link_preview.get_preview_data",
-			{
-				doctype: this.doctype,
-				docname: this.name,
-			},
-			"GET",
-			{ cache: true }
-		);
+	return frappe.xcall(
+		"frappe.desk.link_preview.get_preview_data",
+		{
+			doctype: this.doctype,
+			docname: this.name,
+		},
+		"GET",
+		{ cache: true }
+	).then((preview_data) => {
+		if (!preview_data) {
+			return preview_data;
+		}
+
+		// Clone because the server response is cached
+		preview_data = Object.assign({}, preview_data);
+		
+
+		this.add_child_row_preview_fields(preview_data);
+		console.log("prev data",preview_data)
+
+		return preview_data;
+	});
+}
+
+add_child_row_preview_fields(preview_data) {
+	if (!cur_frm) {
+		return;
 	}
+
+	let grid_row = this.element.closest(".grid-row");
+	let child_docname = grid_row.attr("data-name");
+
+	if (!child_docname) {
+		return;
+	}
+
+	let row = null;
+	let child_doctype = null;
+
+	Object.keys(locals).some((doctype) => {
+		if (locals[doctype] && locals[doctype][child_docname]) {
+			row = locals[doctype][child_docname];
+			child_doctype = doctype;
+			return true;
+		}
+		return false;
+	});
+
+	if (!row || !child_doctype) {
+		return;
+	}
+
+	let meta = frappe.get_meta(child_doctype);
+
+	if (!meta || !meta.fields) {
+		return;
+	}
+
+	const no_value_fields = [
+		"Section Break",
+		"Column Break",
+		"Tab Break",
+		"Button",
+		"Image",
+		"Fold",
+		"Heading"
+	];
+
+	const table_fields = [
+		"Table",
+		"Table MultiSelect"
+	];
+
+	let html_preview_fields = [];
+
+	meta.fields.forEach((df) => {
+		if (
+			!df.in_preview ||
+			table_fields.includes(df.fieldtype) ||
+			no_value_fields.includes(df.fieldtype)
+		) {
+			return;
+		}
+
+		let label = df.label || df.fieldname;
+
+		if (df.fieldtype === "HTML") {
+			console.log("it's html")
+			let html = "";
+
+			// Most HTML fields store their content in df.options
+			if (df.options) {
+				try {
+					html = frappe.render_template(df.options, row);
+				} catch (e) {
+					html = df.options;
+				}
+			}
+
+			// Fallback, in case your HTML field actually has row data
+			if (!html && row[df.fieldname]) {
+				html = row[df.fieldname];
+			}
+
+			if (html) {
+				preview_data[label] = html;
+				html_preview_fields.push(label);
+			}
+
+			return;
+		}
+
+		let value = row[df.fieldname];
+
+		if (value) {
+			preview_data[label] = frappe.format(
+				value,
+				df,
+				{
+					doc: row
+				}
+			);
+		}
+	});
+
+	Object.defineProperty(preview_data, "_html_preview_fields", {
+		value: html_preview_fields,
+		enumerable: false
+	});
+}
+//============================ End Custom for Stock Reservation and Availability Display ===============================
 
 	init_preview_popover(preview_data) {
 		let popover_content = this.get_popover_html(preview_data);
@@ -220,23 +341,33 @@ frappe.ui.LinkPreview = class {
 			${avatar_html}
 		</div>`;
 	}
+//============================ Start Custom for Stock Reservation and Availability Display ===============================
 
 	get_content_html(preview_data) {
-		let content_html = "";
+		console
+	let content_html = "";
+	let html_preview_fields = preview_data._html_preview_fields || [];
 
-		Object.keys(preview_data).forEach((key) => {
-			if (!["preview_image", "preview_title", "name"].includes(key)) {
-				let value = frappe.ellipsis(preview_data[key], 280);
-				let label = key;
-				content_html += `
-					<div class="preview-field">
-						<div class="preview-label text-muted">${__(label)}</div>
-						<div class="preview-value">${value}</div>
-					</div>
-				`;
-			}
-		});
+	Object.keys(preview_data).forEach((key) => {
+		if (!["preview_image", "preview_title", "name"].includes(key)) {
+			let is_html_field = html_preview_fields.includes(key);
 
-		return `<div class="preview-table">${content_html}</div>`;
-	}
+			let value = is_html_field
+				? preview_data[key]
+				: frappe.ellipsis(preview_data[key], 280);
+
+			let label = key;
+
+			content_html += `
+				<div class="preview-field">
+					<div class="preview-label text-muted">${__(label)}</div>
+					<div class="preview-value">${value}</div>
+				</div>
+			`;
+		}
+	});
+
+	return `<div class="preview-table">${content_html}</div>`;
+}
+//============================ End Custom for Stock Reservation and Availability Display ===============================
 };
