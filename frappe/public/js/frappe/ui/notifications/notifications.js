@@ -4,8 +4,9 @@ frappe.ui.Notifications = class Notifications {
 	constructor(opts) {
 		this.tabs = {};
 		this.notification_settings = frappe.boot.notification_settings;
-		this.full_height = opts?.full_height || false;
-
+		//===================Start Custom For task TASK-2026-00077=========================
+		this.full_height = opts?.full_height ?? false;
+		//===================End Custom For task TASK-2026-00077===========================
 		this.wrapper = opts?.wrapper || $(".standard-items-sections");
 		this.make();
 	}
@@ -34,8 +35,10 @@ frappe.ui.Notifications = class Notifications {
 		</span>`)
 			.on("click", (e) => {
 				e.stopImmediatePropagation();
-				console.log("what");
-				frappe.set_route("Form", "Notification Settings", frappe.session.user);
+				//===================Start Custom For task TASK-2026-00077=========================
+				this.dropdown.addClass("hidden");
+				//===================End Custom For task TASK-2026-00077===========================
+
 			})
 			.appendTo(this.header_actions)
 			.attr("title", __("Notification Settings"))
@@ -58,6 +61,9 @@ frappe.ui.Notifications = class Notifications {
 				} else {
 					this.dropdown_list.addClass("hidden");
 				}
+				//===================Start Custom For task TASK-2026-00077=========================
+				e.stopImmediatePropagation();
+				//===================End Custom For task TASK-2026-00077=========================
 			})
 			.appendTo(this.header_actions);
 

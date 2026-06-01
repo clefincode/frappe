@@ -6,11 +6,14 @@ function get_url(socket, path) {
 		path = "";
 	}
 	let url = socket.request.headers.origin;
-	if (conf.developer_mode) {
-		let [protocol, host, port] = url.split(":");
-		port = conf.webserver_port;
-		url = `${protocol}:${host}:${port}`;
-	}
+	//===================Start Custom For task TASK-2026-00077=========================
+	// if (conf.developer_mode) {
+	// 	let [protocol, host, port] = url.split(":");
+	// 	port = conf.webserver_port;
+	// 	url = `${protocol}:${host}:${port}`;
+	// }
+	//===================End Custom For task TASK-2026-00077=========================
+
 	return url + path;
 }
 
