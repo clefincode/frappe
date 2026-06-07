@@ -232,29 +232,17 @@ class NotificationsView extends BaseNotificationsView {
 			.tooltip({ delay: { show: 600, hide: 100 }, trigger: "hover" });
 
 		this.setup_notification_listeners();
-		this.get_notifications_list(this.max_length).then((r) => {
+		this.setup_sidebar_notification_listener();
+		this.refresh_notifications_dropdown().then((r) => {
 			if (!r.message) return;
-			this.dropdown_items = r.message.notification_logs;
-			frappe.update_user_info(r.message.user_info);
-			this.render_notifications_dropdown();
-			if (this.settings.seen == 0 && this.dropdown_items.length > 0) {
-				this.toggle_notification_icon(false);
-			}
+			this.toggle_notification_icon(cint(this.settings.seen));
 		});
 	}
 
 	update_dropdown() {
-		this.get_notifications_list(1).then((r) => {
+		this.refresh_notifications_dropdown().then((r) => {
 			if (!r.message) return;
-			let new_item = r.message.notification_logs[0];
-			frappe.update_user_info(r.message.user_info);
-			this.dropdown_items.unshift(new_item);
-			if (this.dropdown_items.length > this.max_length) {
-				this.container.find(".recent-notification").last().remove();
-				this.dropdown_items.pop();
-			}
-
-			this.insert_into_dropdown();
+			this.change_activity_status();
 		});
 	}
 
@@ -269,14 +257,15 @@ class NotificationsView extends BaseNotificationsView {
 		}
 	}
 
-	mark_as_read(docname, $el) {
-		frappe
-			.call("frappe.desk.doctype.notification_log.notification_log.mark_as_read", {
+	mark_as_read(docname, $el, notification_log) {
+		notification_log && (notification_log.read = 1);
+		$el.removeClass("unread");
+		return frappe.call(
+			"frappe.desk.doctype.notification_log.notification_log.mark_as_read",
+			{
 				docname: docname,
-			})
-			.then(() => {
-				$el.removeClass("unread");
-			});
+			}
+		);
 	}
 
 	insert_into_dropdown() {
@@ -289,7 +278,8 @@ class NotificationsView extends BaseNotificationsView {
 	get_dropdown_item_html(notification_log) {
 		let doc_link = this.get_item_link(notification_log);
 
-		let read_class = notification_log.read ? "" : "unread";
+		const is_read = cint(notification_log.read);
+		let read_class = is_read ? "" : "unread";
 		let message = notification_log.subject;
 
 		let title = message.match(/<b class="subject-title">(.*?)<\/b>/);
@@ -320,25 +310,39 @@ class NotificationsView extends BaseNotificationsView {
 				</div>
 			</a>`);
 
-		if (!notification_log.read) {
+		if (!is_read) {
 			let mark_btn = item_html.find(".mark-as-read");
 			mark_btn.tooltip({ delay: { show: 600, hide: 100 }, trigger: "hover" });
 			mark_btn.on("click", (e) => {
 				e.preventDefault();
 				e.stopImmediatePropagation();
-				this.mark_as_read(notification_log.name, item_html);
+				this.mark_as_read(notification_log.name, item_html, notification_log);
 			});
 		}
 
-		item_html.on("click", () => {
-			!notification_log.read && this.mark_as_read(notification_log.name, item_html);
-			this.notifications_icon.trigger("click");
+		item_html.on("click", (e) => {
+			e.preventDefault();
+
+			const open_notification = () => {
+				this.notifications_icon.trigger("click");
+				frappe.set_route(doc_link);
+			};
+
+			if (!cint(notification_log.read)) {
+				this.mark_as_read(notification_log.name, item_html, notification_log).then(
+					open_notification
+				);
+			} else {
+				open_notification();
+			}
 		});
 
 		return item_html;
 	}
 
 	render_notifications_dropdown() {
+		this.container.empty();
+
 		if (this.settings && !this.settings.enabled) {
 			this.container.html(`<li class="recent-item notification-item">
 				<span class="text-muted">
@@ -346,7 +350,6 @@ class NotificationsView extends BaseNotificationsView {
 				</span></li>`);
 		} else {
 			if (this.dropdown_items.length) {
-				this.container.empty();
 				this.dropdown_items.forEach((notification_log) => {
 					this.container.append(this.get_dropdown_item_html(notification_log));
 				});
@@ -368,12 +371,28 @@ class NotificationsView extends BaseNotificationsView {
 		}
 	}
 
+	sort_notifications_by_date(notification_logs) {
+		return (notification_logs || []).sort((a, b) =>
+			(b.creation || "").localeCompare(a.creation || "")
+		);
+	}
+
+	refresh_notifications_dropdown() {
+		return this.get_notifications_list(this.max_length).then((r) => {
+			if (!r.message) return r;
+
+			this.dropdown_items = this.sort_notifications_by_date(r.message.notification_logs);
+			frappe.update_user_info(r.message.user_info);
+			this.render_notifications_dropdown();
+			return r;
+		});
+	}
+
 	get_notifications_list(limit) {
 		return frappe.call({
 			method: "frappe.desk.doctype.notification_log.notification_log.get_notification_logs",
 			args: { limit: limit },
 			type: "GET",
-			cache: true,
 		});
 	}
 
@@ -390,12 +409,41 @@ class NotificationsView extends BaseNotificationsView {
 		return frappe.utils.get_form_link(link_doctype, link_docname);
 	}
 
+	get_sidebar_notification_item() {
+		return $(".body-sidebar-container .sidebar-notification");
+	}
+
+	get_sidebar_notification_badge() {
+		const sidebar_notification = this.get_sidebar_notification_item();
+		let badge = sidebar_notification.find(".notifications-unseen");
+
+		if (!badge.length) {
+			sidebar_notification
+				.find('.sidebar-item-icon[item-icon="bell"]')
+				.append(`<span class="notifications-unseen"></span>`);
+			badge = sidebar_notification.find(".notifications-unseen");
+		}
+
+		return badge;
+	}
+
+	toggle_sidebar_notification_icon(seen) {
+		const show_badge = !seen;
+		this.get_sidebar_notification_item().toggleClass(
+			"has-unseen-notifications",
+			show_badge
+		);
+		this.get_sidebar_notification_badge().toggleClass("active", show_badge);
+	}
+
 	toggle_notification_icon(seen) {
 		this.notifications_icon.find(".notifications-seen").toggle(seen);
 		this.notifications_icon.find(".notifications-unseen").toggle(!seen);
+		this.toggle_sidebar_notification_icon(seen);
 	}
 
 	toggle_seen(flag) {
+		this.settings.seen = cint(flag);
 		frappe.call(
 			"frappe.desk.doctype.notification_settings.notification_settings.set_seen_value",
 			{
@@ -416,6 +464,7 @@ class NotificationsView extends BaseNotificationsView {
 		});
 
 		this.parent.on("show.bs.dropdown", () => {
+			this.refresh_notifications_dropdown();
 			this.toggle_seen(true);
 			if (this.notifications_icon.find(".notifications-unseen").is(":visible")) {
 				this.toggle_notification_icon(true);
@@ -424,6 +473,26 @@ class NotificationsView extends BaseNotificationsView {
 				);
 			}
 		});
+	}
+
+	setup_sidebar_notification_listener() {
+		const selector = ".body-sidebar-container .sidebar-notification";
+
+		$(document)
+			.off("click.sidebar_notification_indicator", selector)
+			.on("click.sidebar_notification_indicator", selector, () => {
+				const was_unseen = this.get_sidebar_notification_badge().hasClass("active");
+
+				this.refresh_notifications_dropdown();
+				this.toggle_seen(true);
+				this.toggle_notification_icon(true);
+
+				if (was_unseen) {
+					frappe.call(
+						"frappe.desk.doctype.notification_log.notification_log.trigger_indicator_hide"
+					);
+				}
+			});
 	}
 }
 

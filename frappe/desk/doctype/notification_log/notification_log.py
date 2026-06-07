@@ -4,11 +4,11 @@
 import frappe
 from frappe import _
 from frappe.desk.doctype.notification_settings.notification_settings import (
+	create_notification_settings,
 	is_email_notifications_enabled_for_type,
 	is_notifications_enabled,
 )
 from frappe.model.document import Document
-from frappe.utils.caching import http_cache
 
 
 class NotificationLog(Document):
@@ -32,6 +32,9 @@ class NotificationLog(Document):
 		subject: DF.Text | None
 		type: DF.Literal["", "Mention", "Assignment", "Share", "Alert"]
 	# end: auto-generated types
+
+	def before_insert(self):
+		self.read = 0
 
 	def after_insert(self):
 		frappe.publish_realtime("notification", after_commit=True, user=self.for_user)
@@ -166,7 +169,6 @@ def format_email_header(header_map, language, docname):
 
 
 @frappe.whitelist()
-@http_cache(max_age=60, stale_while_revalidate=60 * 60)
 def get_notification_logs(limit: int = 20):
 	notification_logs = frappe.db.get_list(
 		"Notification Log", fields=["*"], limit=limit, order_by="creation desc"
@@ -208,7 +210,10 @@ def trigger_indicator_hide():
 
 
 def set_notifications_as_unseen(user):
-	try:
-		frappe.db.set_value("Notification Settings", user, "seen", 0, update_modified=False)
-	except frappe.DoesNotExistError:
+	if not user:
 		return
+
+	if not frappe.db.exists("Notification Settings", user):
+		create_notification_settings(user)
+
+	frappe.db.set_value("Notification Settings", user, "seen", 0)

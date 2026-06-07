@@ -252,6 +252,10 @@ frappe.ui.Sidebar = class Sidebar {
 		this.workspace_sidebar_items = updated_items;
 	}
 	setup(workspace_title) {
+		if (!workspace_title) {
+			return;
+		}
+
 		if (!this.onboarding_widget) {
 			this.onboarding_widget = {};
 		}
@@ -636,7 +640,13 @@ frappe.ui.Sidebar = class Sidebar {
 		try {
 			let route = frappe.get_route();
 			let view, entity_name;
-			let sidebar_item_map = JSON.parse(localStorage.getItem("sidebar_item_map"));
+			let sidebar_item_map = {};
+			try {
+				sidebar_item_map =
+					JSON.parse(localStorage.getItem("sidebar_item_map") || "{}") || {};
+			} catch {
+				sidebar_item_map = {};
+			}
 			switch (route.length) {
 				case 1:
 					view = "Page";
@@ -646,7 +656,10 @@ frappe.ui.Sidebar = class Sidebar {
 					view = route[0];
 					entity_name = route[1];
 
-					if (frappe.boot.workspace_sidebar_item[entity_name.toLowerCase()]) {
+					if (
+						entity_name &&
+						frappe.boot.workspace_sidebar_item?.[entity_name.toLowerCase()]
+					) {
 						frappe.app.sidebar.setup(entity_name);
 						return;
 					}
@@ -668,8 +681,9 @@ frappe.ui.Sidebar = class Sidebar {
 				this.set_active_workspace_item();
 				return;
 			}
-			if (sidebar_item_map[entity_name]) {
-				this.setup(sidebar_item_map[entity_name][0]);
+			let mapped_sidebar = entity_name && sidebar_item_map[entity_name];
+			if (mapped_sidebar?.length) {
+				this.setup(mapped_sidebar[0]);
 				return;
 			}
 			if (this.sidebar_title && sidebars.includes(this.sidebar_title)) {
@@ -688,7 +702,7 @@ frappe.ui.Sidebar = class Sidebar {
 				let sidebar = this.get_workspace_for_module(module);
 				if (sidebars.includes(this.get_workspace_for_module(module))) {
 					frappe.app.sidebar.setup(sidebar);
-				} else {
+				} else if (module) {
 					frappe.app.sidebar.setup(module);
 				}
 			} else if (module) {
@@ -705,7 +719,7 @@ frappe.ui.Sidebar = class Sidebar {
 		sidebars.forEach((sidebar) => {
 			if (
 				!filter_sidebars.includes(sidebar) &&
-				frappe.boot.workspace_sidebar_item[sidebar.toLowerCase()].app === app
+				frappe.boot.workspace_sidebar_item?.[sidebar.toLowerCase()]?.app === app
 			) {
 				filter_sidebars.push(sidebar);
 			}
