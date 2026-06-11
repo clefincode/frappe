@@ -1,0 +1,1435 @@
+diff --git a/frappe/commands/utils.py b/frappe/commands/utils.py
+index 833f7a8fb9..4f6ab93a3a 100644
+--- a/frappe/commands/utils.py
++++ b/frappe/commands/utils.py
+@@ -172,6 +172,7 @@ def clear_website_cache(context: CliCtxObj):
+ @click.option("--reason")
+ @pass_context
+ def destroy_all_sessions(context: CliCtxObj, reason=None):
++	frappe.log_error('destroy_all_sessions','destroy_all_sessions')
+ 	"Clear sessions of all users (logs them out)"
+ 	import frappe.sessions
+ 
+diff --git a/frappe/core/doctype/role/role.json b/frappe/core/doctype/role/role.json
+index 9099131b03..cb23dac0cc 100644
+--- a/frappe/core/doctype/role/role.json
++++ b/frappe/core/doctype/role/role.json
+@@ -1,5 +1,6 @@
+ {
+  "actions": [],
++ "allow_import": 1,
+  "allow_rename": 1,
+  "autoname": "field:role_name",
+  "creation": "2013-01-08 15:50:01",
+@@ -74,7 +75,7 @@
+  "idx": 1,
+  "index_web_pages_for_search": 1,
+  "links": [],
+- "modified": "2026-01-28 15:58:11.939407",
++ "modified": "2026-06-04 11:50:20.757196",
+  "modified_by": "Administrator",
+  "module": "Core",
+  "name": "Role",
+diff --git a/frappe/desk/doctype/notification_log/notification_log.py b/frappe/desk/doctype/notification_log/notification_log.py
+index 5b4f49526c..09f96af59d 100644
+--- a/frappe/desk/doctype/notification_log/notification_log.py
++++ b/frappe/desk/doctype/notification_log/notification_log.py
+@@ -4,11 +4,11 @@
+ import frappe
+ from frappe import _
+ from frappe.desk.doctype.notification_settings.notification_settings import (
++	create_notification_settings,
+ 	is_email_notifications_enabled_for_type,
+ 	is_notifications_enabled,
+ )
+ from frappe.model.document import Document
+-from frappe.utils.caching import http_cache
+ 
+ 
+ class NotificationLog(Document):
+@@ -33,6 +33,9 @@ class NotificationLog(Document):
+ 		type: DF.Literal["", "Mention", "Assignment", "Share", "Alert"]
+ 	# end: auto-generated types
+ 
++	def before_insert(self):
++		self.read = 0
++
+ 	def after_insert(self):
+ 		frappe.publish_realtime("notification", after_commit=True, user=self.for_user)
+ 		set_notifications_as_unseen(self.for_user)
+@@ -166,7 +169,6 @@ def format_email_header(header_map, language, docname):
+ 
+ 
+ @frappe.whitelist()
+-@http_cache(max_age=60, stale_while_revalidate=60 * 60)
+ def get_notification_logs(limit: int = 20):
+ 	notification_logs = frappe.db.get_list(
+ 		"Notification Log", fields=["*"], limit=limit, order_by="creation desc"
+@@ -208,7 +210,10 @@ def trigger_indicator_hide():
+ 
+ 
+ def set_notifications_as_unseen(user):
+-	try:
+-		frappe.db.set_value("Notification Settings", user, "seen", 0, update_modified=False)
+-	except frappe.DoesNotExistError:
++	if not user:
+ 		return
++
++	if not frappe.db.exists("Notification Settings", user):
++		create_notification_settings(user)
++
++	frappe.db.set_value("Notification Settings", user, "seen", 0)
+diff --git a/frappe/desk/reportview.py b/frappe/desk/reportview.py
+index c46b70038f..421fbe4a00 100644
+--- a/frappe/desk/reportview.py
++++ b/frappe/desk/reportview.py
+@@ -30,6 +30,83 @@ def get():
+ 	if is_virtual_doctype(args.doctype):
+ 		controller = get_controller(args.doctype)
+ 		data = compress(frappe.call(controller.get_list, args=args, **args))
++#============================ Start Custom For TASK-2025-00256 ===============================
++		return data
++		
++	if args.doctype == "Supplier Quotation":
++
++		raw_data = execute(**args)
++
++		sensitive_fields = {
++
++			"grand_total",
++
++			"base_grand_total",
++
++			"total",
++
++			"net_total",
++
++			"discount_amount",
++
++			"rounded_total",
++
++			"rounding_adjustment",
++
++			"total_taxes_and_charges",
++
++			"rate",
++
++			"amount",
++
++			"net_rate",
++
++			"base_net_rate",
++
++			"base_net_amount",
++
++			"net_amount",
++
++			"base_rate",
++
++			"base_price_list_rate",
++
++			"price_list_rate",
++
++			"base_amount",
++
++		}
++
++		today = frappe.utils.getdate(frappe.utils.nowdate())
++
++		for row in raw_data:
++			sq_name = row.get("name")
++			if not sq_name:
++				continue
++
++			rfq_deadline = frappe.db.sql("""
++					SELECT rfq.custom_submission_deadline, rfq.custom_is_rfq_completed
++					FROM `tabSupplier Quotation Item` sqi
++					JOIN `tabRequest for Quotation` rfq
++						ON rfq.name = sqi.request_for_quotation
++					WHERE sqi.parent = %s
++					LIMIT 1
++				""", sq_name)
++
++			if rfq_deadline and rfq_deadline[0][0] or rfq_deadline and cint(rfq_deadline[0][1]) == 0:
++				deadline = frappe.utils.getdate(rfq_deadline[0][0])
++
++				if today < deadline:
++					for f in sensitive_fields:
++						if f in row:
++							row[f] = None
++					for key in row:
++						if key.startswith("Supplier Quotation Item:"):
++							row[key] = None
++
++		data = compress(raw_data, args=args)
++		return data
++#============================ End Custom For TASK-2025-00256 ===============================
+ 	else:
+ 		data = compress(execute(**args), args=args)
+ 	return data
+diff --git a/frappe/model/document.py b/frappe/model/document.py
+index c8ce1821a3..931dce9b69 100644
+--- a/frappe/model/document.py
++++ b/frappe/model/document.py
+@@ -282,6 +282,60 @@ class Document(BaseDocument):
+ 		self.flags.pop("ignore_children", None)
+ 
+ 		self.load_children_from_db()
++		#============================== Start Custom for TASK-2026-00251==============================
++		# Do not run this while metadata documents are being loaded. Calling
++		# self.meta or frappe.get_meta() here for Meta/DocType documents recurses
++		# back into Document.load_from_db().
++		skip_company_filter = (
++			getattr(self, "_metaclass", False)
++			or self.doctype
++			in {
++				"DocType",
++				"DocField",
++				"DocPerm",
++				"DocType Action",
++				"DocType Link",
++				"DocType State",
++			}
++			or frappe.session.user in ("Administrator", "Guest")
++		)
++
++		if not skip_company_filter:
++			employee_company = frappe.db.get_value(
++				"Employee",
++				{"user_id": frappe.session.user},
++				"company",
++			)
++
++			if employee_company:
++				table_fields = self._get_table_fields()
++				has_company_field = self.meta.has_field("company")
++				has_company_in_children = any(
++					df.options and frappe.get_meta(df.options).has_field("company")
++					for df in table_fields
++				)
++
++				if has_company_field or has_company_in_children:
++					if hasattr(self, "company") and self.company:
++						if self.company != employee_company:
++							pass
++
++					for df in table_fields:
++						rows = self.get(df.fieldname)
++
++						if not rows:
++							continue
++
++						if not hasattr(rows[0], "company"):
++							continue
++
++						filtered = [
++							row for row in rows
++							if getattr(row, "company", None) == employee_company
++						]
++
++						self.set(df.fieldname, filtered)
++#============================== End Custom for TASK-2026-00251==============================
+ 
+ 		# sometimes __setup__ can depend on child values, hence calling again at the end
+ 		if hasattr(self, "__setup__"):
+diff --git a/frappe/printing/page/print/print.js b/frappe/printing/page/print/print.js
+index e0d021ce3e..daf9f36b2f 100644
+--- a/frappe/printing/page/print/print.js
++++ b/frappe/printing/page/print/print.js
+@@ -555,6 +555,57 @@ frappe.ui.form.PrintView = class {
+ 
+ 	printit() {
+ 		let me = this;
++//============================ Start Custom For TASK-2025-00241 ===============================
++			frappe.call({
++				method: "iron_sector.www.api.api.track_print",
++				args: {
++					doctype: me.frm.doc.doctype,
++					name: me.frm.doc.name
++				},
++				callback: function(r) {
++					if (r.message && r.message.success) {
++						const print_status = r.message;
++						if (print_status.requires_warning) {
++							frappe.confirm(
++								__('This document can only be printed once. After the first print, all subsequent prints will be marked as "Copy of Original". Do you want to continue?'),
++								function() {
++									me.execute_print(print_status);
++								},
++								function() {
++									frappe.show_alert({
++										message: __('Print cancelled'),
++										indicator: 'info'
++									}, 5);
++								}
++							);
++						} else {
++							me.execute_print(print_status);
++						}
++					} else {
++
++						frappe.show_alert({
++							message: __('Print tracking error. Proceeding with normal print.'),
++							indicator: 'orange'
++						}, 5);
++						me.execute_print({is_copy: false});
++					}
++				}
++			});
++		}
++
++		execute_print(print_status) {
++				let me = this;
++				if (print_status.requires_warning) {
++					frappe.call({
++						method: "iron_sector.www.api.api.mark_as_printed",
++						args: {
++							doctype: me.frm.doc.doctype,
++							name: me.frm.doc.name
++						}
++					});
++				}
++				me.is_copy_print = print_status.is_copy || false;
++//============================ End Custom For TASK-2025-00241 ===============================
+ 
+ 		if (cint(me.print_settings.enable_print_server)) {
+ 			if (localStorage.getItem("network_printer")) {
+@@ -606,9 +657,42 @@ frappe.ui.form.PrintView = class {
+ 			);
+ 			me.printer_setting_dialog();
+ 		} else {
+-			me.render_page("/printview?", true);
++//============================ Start Custom For TASK-2025-00241 ===============================
++			me.render_page_with_watermark();
+ 		}
+ 	}
++render_page_with_watermark() {
++    let me = this;
++    
++    if (me.is_copy_print) {
++   
++        frappe.call({
++            method: "iron_sector.www.api.api.get_print_html_with_watermark",
++            args: {
++                doctype: me.frm.doc.doctype,
++                name: me.frm.doc.name,
++                print_format: me.selected_format() || undefined,
++                no_letterhead: me.with_letterhead ? 0 : 1
++            },
++            callback: function(r) {
++                if (r.message) {
++              
++                    const print_window = window.open('', '_blank');
++                    print_window.document.write(r.message);
++                    print_window.document.close();
++                
++                    print_window.onload = function() {
++                        print_window.print();
++                    };
++                }
++            }
++        });
++    } else {
++        me.render_page("/printview?", true);
++    }
++}
++//============================ End Custom For TASK-2025-00241 ===============================
++
+ 
+ 	print_by_server() {
+ 		let me = this;
+@@ -676,31 +760,93 @@ frappe.ui.form.PrintView = class {
+ 		});
+ 	}
+ 	render_pdf() {
+-		let print_format = this.get_print_format();
+-		if (print_format.print_format_builder_beta) {
+-			let params = new URLSearchParams({
+-				doctype: this.frm.doc.doctype,
+-				name: this.frm.doc.name,
+-				print_format: print_format.name,
+-				letterhead: this.get_letterhead(),
+-			});
+-			let w = window.open(`/api/method/frappe.utils.weasyprint.download_pdf?${params}`);
+-			if (!w) {
+-				frappe.msgprint(__("Please enable pop-ups"));
+-				return;
+-			}
+-		} else {
+-			let pdf_generator = this.get_pdf_generator(print_format?.pdf_generator);
+-			if (pdf_generator === "wkhtmltopdf") {
+-				this.is_wkhtmltopdf_valid();
+-			}
+-			this.render_page(
+-				"/api/method/frappe.utils.print_format.download_pdf?",
+-				false,
+-				print_format?.pdf_generator
+-			);
+-		}
+-	}
++//============================ Start Custom For TASK-2025-00241 ===============================
++	let me = this;
++    frappe.call({
++        method: "iron_sector.www.api.api.track_print",
++        args: {
++            doctype: me.frm.doc.doctype,
++            name: me.frm.doc.name
++        },
++        callback: function(r) {
++            if (r.message && r.message.success) {
++                const print_status = r.message;
++                if (print_status.requires_warning) {
++                    frappe.confirm(
++                        __('This document can only be printed once. After the first print, all subsequent prints will be marked as "Copy of Original". Do you want to continue?'),
++                        function() {
++                            me.execute_render_pdf(print_status);
++                        },
++                        function() {
++                            frappe.show_alert({
++                                message: __('PDF generation cancelled'),
++                                indicator: 'info'
++                            }, 5);
++                        }
++                    );
++                } else {
++                    me.execute_render_pdf(print_status);
++                }
++            } else {
++                frappe.show_alert({
++                    message: __('Print tracking error. Proceeding with PDF generation.'),
++                    indicator: 'orange'
++                }, 5);
++                me.execute_render_pdf({is_copy: false});
++            }
++        }
++    });
++}
++
++execute_render_pdf(print_status) {
++    let me = this;
++    if (print_status.requires_warning) {
++        frappe.call({
++            method: "iron_sector.www.api.api.mark_as_printed",
++            args: {
++                doctype: me.frm.doc.doctype,
++                name: me.frm.doc.name
++            }
++        });
++    }
++    me.is_copy_print = print_status.is_copy || false;
++
++    
++    if (me.is_copy_print) {
++        let print_format = me.selected_format() || me.get_print_format().name;
++        let params = new URLSearchParams({
++            doctype: me.frm.doc.doctype,
++            name: me.frm.doc.name,
++            print_format: print_format,
++            letterhead: me.get_letterhead(),
++            no_letterhead: me.with_letterhead ? 0 : 1
++        });
++        
++        let w = window.open(`/api/method/iron_sector.www.api.api.view_pdf_with_watermark?${params}`);
++        if (!w) {
++            frappe.msgprint(__("Please enable pop-ups"));
++        }
++    } else {
++        let print_format = me.get_print_format();
++        if (print_format.print_format_builder_beta) {
++            let params = new URLSearchParams({
++                doctype: me.frm.doc.doctype,
++                name: me.frm.doc.name,
++                print_format: print_format.name,
++                letterhead: me.get_letterhead(),
++            });
++            let w = window.open(`/api/method/frappe.utils.weasyprint.download_pdf?${params}`);
++            if (!w) {
++                frappe.msgprint(__("Please enable pop-ups"));
++            }
++        } else {
++            me.is_wkhtmltopdf_valid();
++            me.render_page("/api/method/frappe.utils.print_format.download_pdf?", true);
++        }
++    }
++}
++//============================ End Custom For TASK-2025-00241 ===============================
++
+ 	get_pdf_generator(pdf_generator) {
+ 		if (!pdf_generator) {
+ 			pdf_generator = this.print_settings.pdf_generator || "wkhtmltopdf";
+diff --git a/frappe/public/js/frappe/form/workflow.js b/frappe/public/js/frappe/form/workflow.js
+index 8088f2ac26..94d3704a9d 100644
+--- a/frappe/public/js/frappe/form/workflow.js
++++ b/frappe/public/js/frappe/form/workflow.js
+@@ -125,22 +125,23 @@ frappe.ui.form.States = class FormStates {
+ 		// set the workflow_action for use in form scripts
+ 		frappe.dom.freeze();
+ 		me.frm.selected_workflow_action = transition.action;
+-		me.frm.script_manager.trigger("before_workflow_action").then(() => {
+-			frappe
+-				.xcall("frappe.model.workflow.apply_workflow", {
++		me.frm.script_manager
++			.trigger("before_workflow_action")
++			.then(() =>
++				frappe.xcall("frappe.model.workflow.apply_workflow", {
+ 					doc: me.frm.doc,
+ 					action: transition.action,
+ 				})
+-				.then((doc) => {
+-					frappe.model.sync(doc);
+-					me.frm.refresh();
+-					me.frm.selected_workflow_action = null;
+-					me.frm.script_manager.trigger("after_workflow_action");
+-				})
+-				.finally(() => {
+-					frappe.dom.unfreeze();
+-				});
+-		});
++			)
++			.then((doc) => {
++				frappe.model.sync(doc);
++				me.frm.refresh();
++				me.frm.script_manager.trigger("after_workflow_action");
++			})
++			.finally(() => {
++				me.frm.selected_workflow_action = null;
++				frappe.dom.unfreeze();
++			});
+ 	}
+ 
+ 	setup_btn(action_added) {
+diff --git a/frappe/public/js/frappe/ui/link_preview.js b/frappe/public/js/frappe/ui/link_preview.js
+index 97a1e68c7f..6eb95cee27 100644
+--- a/frappe/public/js/frappe/ui/link_preview.js
++++ b/frappe/public/js/frappe/ui/link_preview.js
+@@ -129,19 +129,140 @@ frappe.ui.LinkPreview = class {
+ 	clear_all_popovers() {
+ 		this.popovers_list.forEach(($el) => $el.hide());
+ 	}
+-
++//============================ Start Custom for Stock Reservation and Availability Display ===============================
+ 	get_preview_data() {
+-		return frappe.xcall(
+-			"frappe.desk.link_preview.get_preview_data",
+-			{
+-				doctype: this.doctype,
+-				docname: this.name,
+-			},
+-			"GET",
+-			{ cache: true }
+-		);
++	return frappe.xcall(
++		"frappe.desk.link_preview.get_preview_data",
++		{
++			doctype: this.doctype,
++			docname: this.name,
++		},
++		"GET",
++		{ cache: true }
++	).then((preview_data) => {
++		if (!preview_data) {
++			return preview_data;
++		}
++
++		// Clone because the server response is cached
++		preview_data = Object.assign({}, preview_data);
++		
++
++		this.add_child_row_preview_fields(preview_data);
++		console.log("prev data",preview_data)
++
++		return preview_data;
++	});
++}
++
++add_child_row_preview_fields(preview_data) {
++	if (!cur_frm) {
++		return;
++	}
++
++	let grid_row = this.element.closest(".grid-row");
++	let child_docname = grid_row.attr("data-name");
++
++	if (!child_docname) {
++		return;
++	}
++
++	let row = null;
++	let child_doctype = null;
++
++	Object.keys(locals).some((doctype) => {
++		if (locals[doctype] && locals[doctype][child_docname]) {
++			row = locals[doctype][child_docname];
++			child_doctype = doctype;
++			return true;
++		}
++		return false;
++	});
++
++	if (!row || !child_doctype) {
++		return;
+ 	}
+ 
++	let meta = frappe.get_meta(child_doctype);
++
++	if (!meta || !meta.fields) {
++		return;
++	}
++
++	const no_value_fields = [
++		"Section Break",
++		"Column Break",
++		"Tab Break",
++		"Button",
++		"Image",
++		"Fold",
++		"Heading"
++	];
++
++	const table_fields = [
++		"Table",
++		"Table MultiSelect"
++	];
++
++	let html_preview_fields = [];
++
++	meta.fields.forEach((df) => {
++		if (
++			!df.in_preview ||
++			table_fields.includes(df.fieldtype) ||
++			no_value_fields.includes(df.fieldtype)
++		) {
++			return;
++		}
++
++		let label = df.label || df.fieldname;
++
++		if (df.fieldtype === "HTML") {
++			console.log("it's html")
++			let html = "";
++
++			// Most HTML fields store their content in df.options
++			if (df.options) {
++				try {
++					html = frappe.render_template(df.options, row);
++				} catch (e) {
++					html = df.options;
++				}
++			}
++
++			// Fallback, in case your HTML field actually has row data
++			if (!html && row[df.fieldname]) {
++				html = row[df.fieldname];
++			}
++
++			if (html) {
++				preview_data[label] = html;
++				html_preview_fields.push(label);
++			}
++
++			return;
++		}
++
++		let value = row[df.fieldname];
++
++		if (value) {
++			preview_data[label] = frappe.format(
++				value,
++				df,
++				{
++					doc: row
++				}
++			);
++		}
++	});
++
++	Object.defineProperty(preview_data, "_html_preview_fields", {
++		value: html_preview_fields,
++		enumerable: false
++	});
++}
++//============================ End Custom for Stock Reservation and Availability Display ===============================
++
+ 	init_preview_popover(preview_data) {
+ 		let popover_content = this.get_popover_html(preview_data);
+ 		this.element.popover({
+@@ -220,23 +341,33 @@ frappe.ui.LinkPreview = class {
+ 			${avatar_html}
+ 		</div>`;
+ 	}
++//============================ Start Custom for Stock Reservation and Availability Display ===============================
+ 
+ 	get_content_html(preview_data) {
+-		let content_html = "";
+-
+-		Object.keys(preview_data).forEach((key) => {
+-			if (!["preview_image", "preview_title", "name"].includes(key)) {
+-				let value = frappe.ellipsis(preview_data[key], 280);
+-				let label = key;
+-				content_html += `
+-					<div class="preview-field">
+-						<div class="preview-label text-muted">${__(label)}</div>
+-						<div class="preview-value">${value}</div>
+-					</div>
+-				`;
+-			}
+-		});
++		console
++	let content_html = "";
++	let html_preview_fields = preview_data._html_preview_fields || [];
+ 
+-		return `<div class="preview-table">${content_html}</div>`;
+-	}
++	Object.keys(preview_data).forEach((key) => {
++		if (!["preview_image", "preview_title", "name"].includes(key)) {
++			let is_html_field = html_preview_fields.includes(key);
++
++			let value = is_html_field
++				? preview_data[key]
++				: frappe.ellipsis(preview_data[key], 280);
++
++			let label = key;
++
++			content_html += `
++				<div class="preview-field">
++					<div class="preview-label text-muted">${__(label)}</div>
++					<div class="preview-value">${value}</div>
++				</div>
++			`;
++		}
++	});
++
++	return `<div class="preview-table">${content_html}</div>`;
++}
++//============================ End Custom for Stock Reservation and Availability Display ===============================
+ };
+diff --git a/frappe/public/js/frappe/ui/notifications/notifications.js b/frappe/public/js/frappe/ui/notifications/notifications.js
+index 80b545a3eb..491561c8bb 100644
+--- a/frappe/public/js/frappe/ui/notifications/notifications.js
++++ b/frappe/public/js/frappe/ui/notifications/notifications.js
+@@ -4,8 +4,9 @@ frappe.ui.Notifications = class Notifications {
+ 	constructor(opts) {
+ 		this.tabs = {};
+ 		this.notification_settings = frappe.boot.notification_settings;
+-		this.full_height = opts?.full_height || false;
+-
++		//===================Start Custom For task TASK-2026-00077=========================
++		this.full_height = opts?.full_height ?? false;
++		//===================End Custom For task TASK-2026-00077===========================
+ 		this.wrapper = opts?.wrapper || $(".standard-items-sections");
+ 		this.make();
+ 	}
+@@ -34,8 +35,10 @@ frappe.ui.Notifications = class Notifications {
+ 		</span>`)
+ 			.on("click", (e) => {
+ 				e.stopImmediatePropagation();
+-				console.log("what");
+-				frappe.set_route("Form", "Notification Settings", frappe.session.user);
++				//===================Start Custom For task TASK-2026-00077=========================
++				this.dropdown.addClass("hidden");
++				//===================End Custom For task TASK-2026-00077===========================
++
+ 			})
+ 			.appendTo(this.header_actions)
+ 			.attr("title", __("Notification Settings"))
+@@ -58,6 +61,9 @@ frappe.ui.Notifications = class Notifications {
+ 				} else {
+ 					this.dropdown_list.addClass("hidden");
+ 				}
++				//===================Start Custom For task TASK-2026-00077=========================
++				e.stopImmediatePropagation();
++				//===================End Custom For task TASK-2026-00077=========================
+ 			})
+ 			.appendTo(this.header_actions);
+ 
+@@ -226,29 +232,17 @@ class NotificationsView extends BaseNotificationsView {
+ 			.tooltip({ delay: { show: 600, hide: 100 }, trigger: "hover" });
+ 
+ 		this.setup_notification_listeners();
+-		this.get_notifications_list(this.max_length).then((r) => {
++		this.setup_sidebar_notification_listener();
++		this.refresh_notifications_dropdown().then((r) => {
+ 			if (!r.message) return;
+-			this.dropdown_items = r.message.notification_logs;
+-			frappe.update_user_info(r.message.user_info);
+-			this.render_notifications_dropdown();
+-			if (this.settings.seen == 0 && this.dropdown_items.length > 0) {
+-				this.toggle_notification_icon(false);
+-			}
++			this.toggle_notification_icon(cint(this.settings.seen));
+ 		});
+ 	}
+ 
+ 	update_dropdown() {
+-		this.get_notifications_list(1).then((r) => {
++		this.refresh_notifications_dropdown().then((r) => {
+ 			if (!r.message) return;
+-			let new_item = r.message.notification_logs[0];
+-			frappe.update_user_info(r.message.user_info);
+-			this.dropdown_items.unshift(new_item);
+-			if (this.dropdown_items.length > this.max_length) {
+-				this.container.find(".recent-notification").last().remove();
+-				this.dropdown_items.pop();
+-			}
+-
+-			this.insert_into_dropdown();
++			this.change_activity_status();
+ 		});
+ 	}
+ 
+@@ -263,14 +257,15 @@ class NotificationsView extends BaseNotificationsView {
+ 		}
+ 	}
+ 
+-	mark_as_read(docname, $el) {
+-		frappe
+-			.call("frappe.desk.doctype.notification_log.notification_log.mark_as_read", {
++	mark_as_read(docname, $el, notification_log) {
++		notification_log && (notification_log.read = 1);
++		$el.removeClass("unread");
++		return frappe.call(
++			"frappe.desk.doctype.notification_log.notification_log.mark_as_read",
++			{
+ 				docname: docname,
+-			})
+-			.then(() => {
+-				$el.removeClass("unread");
+-			});
++			}
++		);
+ 	}
+ 
+ 	insert_into_dropdown() {
+@@ -283,7 +278,8 @@ class NotificationsView extends BaseNotificationsView {
+ 	get_dropdown_item_html(notification_log) {
+ 		let doc_link = this.get_item_link(notification_log);
+ 
+-		let read_class = notification_log.read ? "" : "unread";
++		const is_read = cint(notification_log.read);
++		let read_class = is_read ? "" : "unread";
+ 		let message = notification_log.subject;
+ 
+ 		let title = message.match(/<b class="subject-title">(.*?)<\/b>/);
+@@ -314,25 +310,39 @@ class NotificationsView extends BaseNotificationsView {
+ 				</div>
+ 			</a>`);
+ 
+-		if (!notification_log.read) {
++		if (!is_read) {
+ 			let mark_btn = item_html.find(".mark-as-read");
+ 			mark_btn.tooltip({ delay: { show: 600, hide: 100 }, trigger: "hover" });
+ 			mark_btn.on("click", (e) => {
+ 				e.preventDefault();
+ 				e.stopImmediatePropagation();
+-				this.mark_as_read(notification_log.name, item_html);
++				this.mark_as_read(notification_log.name, item_html, notification_log);
+ 			});
+ 		}
+ 
+-		item_html.on("click", () => {
+-			!notification_log.read && this.mark_as_read(notification_log.name, item_html);
+-			this.notifications_icon.trigger("click");
++		item_html.on("click", (e) => {
++			e.preventDefault();
++
++			const open_notification = () => {
++				this.notifications_icon.trigger("click");
++				frappe.set_route(doc_link);
++			};
++
++			if (!cint(notification_log.read)) {
++				this.mark_as_read(notification_log.name, item_html, notification_log).then(
++					open_notification
++				);
++			} else {
++				open_notification();
++			}
+ 		});
+ 
+ 		return item_html;
+ 	}
+ 
+ 	render_notifications_dropdown() {
++		this.container.empty();
++
+ 		if (this.settings && !this.settings.enabled) {
+ 			this.container.html(`<li class="recent-item notification-item">
+ 				<span class="text-muted">
+@@ -340,7 +350,6 @@ class NotificationsView extends BaseNotificationsView {
+ 				</span></li>`);
+ 		} else {
+ 			if (this.dropdown_items.length) {
+-				this.container.empty();
+ 				this.dropdown_items.forEach((notification_log) => {
+ 					this.container.append(this.get_dropdown_item_html(notification_log));
+ 				});
+@@ -362,12 +371,28 @@ class NotificationsView extends BaseNotificationsView {
+ 		}
+ 	}
+ 
++	sort_notifications_by_date(notification_logs) {
++		return (notification_logs || []).sort((a, b) =>
++			(b.creation || "").localeCompare(a.creation || "")
++		);
++	}
++
++	refresh_notifications_dropdown() {
++		return this.get_notifications_list(this.max_length).then((r) => {
++			if (!r.message) return r;
++
++			this.dropdown_items = this.sort_notifications_by_date(r.message.notification_logs);
++			frappe.update_user_info(r.message.user_info);
++			this.render_notifications_dropdown();
++			return r;
++		});
++	}
++
+ 	get_notifications_list(limit) {
+ 		return frappe.call({
+ 			method: "frappe.desk.doctype.notification_log.notification_log.get_notification_logs",
+ 			args: { limit: limit },
+ 			type: "GET",
+-			cache: true,
+ 		});
+ 	}
+ 
+@@ -384,12 +409,41 @@ class NotificationsView extends BaseNotificationsView {
+ 		return frappe.utils.get_form_link(link_doctype, link_docname);
+ 	}
+ 
++	get_sidebar_notification_item() {
++		return $(".body-sidebar-container .sidebar-notification");
++	}
++
++	get_sidebar_notification_badge() {
++		const sidebar_notification = this.get_sidebar_notification_item();
++		let badge = sidebar_notification.find(".notifications-unseen");
++
++		if (!badge.length) {
++			sidebar_notification
++				.find('.sidebar-item-icon[item-icon="bell"]')
++				.append(`<span class="notifications-unseen"></span>`);
++			badge = sidebar_notification.find(".notifications-unseen");
++		}
++
++		return badge;
++	}
++
++	toggle_sidebar_notification_icon(seen) {
++		const show_badge = !seen;
++		this.get_sidebar_notification_item().toggleClass(
++			"has-unseen-notifications",
++			show_badge
++		);
++		this.get_sidebar_notification_badge().toggleClass("active", show_badge);
++	}
++
+ 	toggle_notification_icon(seen) {
+ 		this.notifications_icon.find(".notifications-seen").toggle(seen);
+ 		this.notifications_icon.find(".notifications-unseen").toggle(!seen);
++		this.toggle_sidebar_notification_icon(seen);
+ 	}
+ 
+ 	toggle_seen(flag) {
++		this.settings.seen = cint(flag);
+ 		frappe.call(
+ 			"frappe.desk.doctype.notification_settings.notification_settings.set_seen_value",
+ 			{
+@@ -410,6 +464,7 @@ class NotificationsView extends BaseNotificationsView {
+ 		});
+ 
+ 		this.parent.on("show.bs.dropdown", () => {
++			this.refresh_notifications_dropdown();
+ 			this.toggle_seen(true);
+ 			if (this.notifications_icon.find(".notifications-unseen").is(":visible")) {
+ 				this.toggle_notification_icon(true);
+@@ -419,6 +474,26 @@ class NotificationsView extends BaseNotificationsView {
+ 			}
+ 		});
+ 	}
++
++	setup_sidebar_notification_listener() {
++		const selector = ".body-sidebar-container .sidebar-notification";
++
++		$(document)
++			.off("click.sidebar_notification_indicator", selector)
++			.on("click.sidebar_notification_indicator", selector, () => {
++				const was_unseen = this.get_sidebar_notification_badge().hasClass("active");
++
++				this.refresh_notifications_dropdown();
++				this.toggle_seen(true);
++				this.toggle_notification_icon(true);
++
++				if (was_unseen) {
++					frappe.call(
++						"frappe.desk.doctype.notification_log.notification_log.trigger_indicator_hide"
++					);
++				}
++			});
++	}
+ }
+ 
+ class EventsView extends BaseNotificationsView {
+diff --git a/frappe/public/js/frappe/ui/sidebar/sidebar.js b/frappe/public/js/frappe/ui/sidebar/sidebar.js
+index c7f24ba09c..9333c54ea0 100644
+--- a/frappe/public/js/frappe/ui/sidebar/sidebar.js
++++ b/frappe/public/js/frappe/ui/sidebar/sidebar.js
+@@ -252,6 +252,10 @@ frappe.ui.Sidebar = class Sidebar {
+ 		this.workspace_sidebar_items = updated_items;
+ 	}
+ 	setup(workspace_title) {
++		if (!workspace_title) {
++			return;
++		}
++
+ 		if (!this.onboarding_widget) {
+ 			this.onboarding_widget = {};
+ 		}
+@@ -636,7 +640,13 @@ frappe.ui.Sidebar = class Sidebar {
+ 		try {
+ 			let route = frappe.get_route();
+ 			let view, entity_name;
+-			let sidebar_item_map = JSON.parse(localStorage.getItem("sidebar_item_map"));
++			let sidebar_item_map = {};
++			try {
++				sidebar_item_map =
++					JSON.parse(localStorage.getItem("sidebar_item_map") || "{}") || {};
++			} catch {
++				sidebar_item_map = {};
++			}
+ 			switch (route.length) {
+ 				case 1:
+ 					view = "Page";
+@@ -646,7 +656,10 @@ frappe.ui.Sidebar = class Sidebar {
+ 					view = route[0];
+ 					entity_name = route[1];
+ 
+-					if (frappe.boot.workspace_sidebar_item[entity_name.toLowerCase()]) {
++					if (
++						entity_name &&
++						frappe.boot.workspace_sidebar_item?.[entity_name.toLowerCase()]
++					) {
+ 						frappe.app.sidebar.setup(entity_name);
+ 						return;
+ 					}
+@@ -668,8 +681,9 @@ frappe.ui.Sidebar = class Sidebar {
+ 				this.set_active_workspace_item();
+ 				return;
+ 			}
+-			if (sidebar_item_map[entity_name]) {
+-				this.setup(sidebar_item_map[entity_name][0]);
++			let mapped_sidebar = entity_name && sidebar_item_map[entity_name];
++			if (mapped_sidebar?.length) {
++				this.setup(mapped_sidebar[0]);
+ 				return;
+ 			}
+ 			if (this.sidebar_title && sidebars.includes(this.sidebar_title)) {
+@@ -688,7 +702,7 @@ frappe.ui.Sidebar = class Sidebar {
+ 				let sidebar = this.get_workspace_for_module(module);
+ 				if (sidebars.includes(this.get_workspace_for_module(module))) {
+ 					frappe.app.sidebar.setup(sidebar);
+-				} else {
++				} else if (module) {
+ 					frappe.app.sidebar.setup(module);
+ 				}
+ 			} else if (module) {
+@@ -705,7 +719,7 @@ frappe.ui.Sidebar = class Sidebar {
+ 		sidebars.forEach((sidebar) => {
+ 			if (
+ 				!filter_sidebars.includes(sidebar) &&
+-				frappe.boot.workspace_sidebar_item[sidebar.toLowerCase()].app === app
++				frappe.boot.workspace_sidebar_item?.[sidebar.toLowerCase()]?.app === app
+ 			) {
+ 				filter_sidebars.push(sidebar);
+ 			}
+diff --git a/frappe/public/js/frappe/ui/sidebar/sidebar_item.html b/frappe/public/js/frappe/ui/sidebar/sidebar_item.html
+index 9106234bd7..4707cb2ea5 100644
+--- a/frappe/public/js/frappe/ui/sidebar/sidebar_item.html
++++ b/frappe/public/js/frappe/ui/sidebar/sidebar_item.html
+@@ -31,11 +31,14 @@
+                 {% if (item.show_arrow) { %}
+                     {% icon = "chevron-right" %}
+                 {% } %}
+-				<span class="sidebar-item-icon text-ink-gray-7" item-icon="{{ icon }}">
+-                    {% if (icon) { %}
+-                        {%= frappe.utils.icon(icon, "sm", "", "", "text-ink-gray-7 current-color", true) %}
+-                    {% } %}
+-                </span>
++					<span class="sidebar-item-icon text-ink-gray-7" item-icon="{{ icon }}">
++						{% if (icon) { %}
++							{%= frappe.utils.icon(icon, "sm", "", "", "text-ink-gray-7 current-color", true) %}
++						{% } %}
++						{% if (item.standard && icon == "bell") { %}
++							<span class="notifications-unseen"></span>
++						{% } %}
++					</span>
+                 <span class="sidebar-item-label">{{ item.label }}</span>
+                 {% if (item.suffix) { %}
+                      <span class="sidebar-item-suffix">{{ item.suffix }}</span>
+@@ -59,4 +62,4 @@
+         {% } %}
+     </div>
+     <div class="sidebar-child-item nested-container"></div>
+-</div>
+\ No newline at end of file
++</div>
+diff --git a/frappe/public/js/frappe/ui/sidebar/sidebar_item.js b/frappe/public/js/frappe/ui/sidebar/sidebar_item.js
+index 8c832919e6..082ddbe397 100644
+--- a/frappe/public/js/frappe/ui/sidebar/sidebar_item.js
++++ b/frappe/public/js/frappe/ui/sidebar/sidebar_item.js
+@@ -33,14 +33,15 @@ frappe.ui.sidebar_item.TypeLink = class SidebarItem {
+ 				path = frappe.utils.generate_route(args);
+ 			} else if (this.item.link_type == "Workspace") {
+ 				let workspaces = frappe.workspaces[frappe.router.slug(this.item.link_to)];
+-				if (workspaces.public) {
+-					path = "/desk/" + frappe.router.slug(this.item.link_to);
+-				} else {
+-					path = "/desk/private/" + frappe.router.slug(this.item.link_to);
+-				}
+ 
+ 				if (this.item.route) {
+ 					path = this.item.route;
++				} else if (!workspaces) {
++					return;
++				} else if (workspaces.public) {
++					path = "/desk/" + frappe.router.slug(this.item.link_to);
++				} else {
++					path = "/desk/private/" + frappe.router.slug(this.item.link_to);
+ 				}
+ 			} else if (this.item.link_type === "URL") {
+ 				path = this.item.url;
+diff --git a/frappe/public/js/frappe/ui/toolbar/search_utils.js b/frappe/public/js/frappe/ui/toolbar/search_utils.js
+index 58467c5bcd..cdfc514487 100644
+--- a/frappe/public/js/frappe/ui/toolbar/search_utils.js
++++ b/frappe/public/js/frappe/ui/toolbar/search_utils.js
+@@ -597,53 +597,66 @@ frappe.search.utils = {
+ 		];
+ 	},
+ 
++	
++//============================ Start Custom For TASK-2025-00188 ===============================
++
+ 	fuzzy_search: function (keywords = "", _item = "", return_marked_string = false) {
+-		let item = __(_item);
++			const translated_item = __(_item) || "";
++			const original_item = _item || "";
++			const candidates = [translated_item, original_item];
++			let best_score = 0;
++			let best_matches = [];
++			let best_item = translated_item;
++
++			for (const candidate of candidates) {
++				const [, score, matches] = fuzzy_match(keywords, candidate, return_marked_string);
++				if (score > best_score) {
++					best_score = score;
++					best_matches = matches;
++					best_item = candidate;
++				}
++			}
+ 
+-		let [, score, matches] = fuzzy_match(keywords, item, return_marked_string);
+-		if (score == 0 && frappe.boot.lang !== "en" && item != _item) {
+-			item = _item || "";
+-			[, score, matches] = fuzzy_match(keywords, item, return_marked_string);
+-		}
++			if (!return_marked_string) {
++				return best_score;
++			}
+ 
+-		if (!return_marked_string) {
+-			return score;
+-		}
+-		if (score == 0) {
+-			return {
+-				score: score,
+-				marked_string: item,
+-			};
+-		}
++			if (best_score === 0) {
++				return {
++					score: best_score,
++					marked_string: best_item,
++				};
++			}
+ 
+-		// Create Boolean mask to mark matching indices in the item string
+-		const matchArray = Array(item.length).fill(0);
+-		matches.forEach((index) => (matchArray[index] = 1));
++			const matchArray = Array(best_item.length).fill(0);
++			best_matches.forEach((index) => (matchArray[index] = 1));
+ 
+-		let marked_string = "";
+-		let buffer = "";
++			let marked_string = "";
++			let buffer = "";
+ 
+-		// Clear the buffer and return marked matches.
+-		const flushBuffer = () => {
+-			if (!buffer) return "";
+-			const temp = `<mark>${buffer}</mark>`;
+-			buffer = "";
+-			return temp;
+-		};
++			const flushBuffer = () => {
++				if (!buffer) return "";
++				const temp = `<mark>${buffer}</mark>`;
++				buffer = "";
++				return temp;
++			};
+ 
+-		matchArray.forEach((isMatch, index) => {
+-			if (isMatch) {
+-				buffer += item[index];
+-			} else {
+-				marked_string += flushBuffer();
+-				marked_string += item[index];
+-			}
+-		});
+-		marked_string += flushBuffer();
++			matchArray.forEach((isMatch, index) => {
++				if (isMatch) {
++					buffer += best_item[index];
++				} else {
++					marked_string += flushBuffer();
++					marked_string += best_item[index];
++				}
++			});
++			marked_string += flushBuffer();
+ 
+-		return { score, marked_string };
++			return { score: best_score, marked_string };
+ 	},
+ 
++//============================ End Custom For TASK-2025-00188 =================================
++
++
+ 	/**
+ 	 * @deprecated Use frappe.search.utils.fuzzy_search(subseq, str, true).marked_string instead.
+ 	 */
+diff --git a/frappe/public/js/frappe/views/reports/query_report.js b/frappe/public/js/frappe/views/reports/query_report.js
+index 734140606f..e29af560cf 100644
+--- a/frappe/public/js/frappe/views/reports/query_report.js
++++ b/frappe/public/js/frappe/views/reports/query_report.js
+@@ -859,6 +859,11 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
+ 					this.add_chart_buttons_to_toolbar(false);
+ 					this.toggle_print_buttons(false);
+ 				}
++                //============================ Start Custom For TASK-2025-00199 ===============================
++
++                this.reposition_custom_sections();
++
++                //============================ Start Custom For TASK-2025-00199 ===============================
+ 
+ 				this.show_footer_message();
+ 				frappe.hide_progress();
+@@ -2401,6 +2406,35 @@ frappe.views.QueryReport = class QueryReport extends frappe.views.BaseList {
+ 		}, []);
+ 	}
+ 
++//============================ Start Custom For TASK-2025-00199 ===============================
++
++    reposition_custom_sections() {
++        if (!this.page || !this.page.main) return;
++        let $blocks = this.page.main.find("[data-ownership-summary]");
++        if (!$blocks.length) return;
++
++        if ($blocks.length > 1) {
++            $blocks.slice(0, -1).remove();
++            $blocks = this.page.main.find("[data-ownership-summary]");
++        }
++
++        const $block = $blocks.last();
++
++        const chart_ready =
++            this.$chart && this.$chart.length && this.$chart.is(":visible") && this.$chart.children().length;
++
++        if (chart_ready) {
++            this.$chart.append($block);
++        } else if (this.$report && this.$report.length) {
++            this.$report.before($block);
++        } else {
++            return;
++        }
++
++        $block.css("display", "block");
++    }
++//============================ End Custom For TASK-2025-00199 =================================
++
+ 	// backward compatibility
+ 	get get_values() {
+ 		return this.get_filter_values;
+diff --git a/frappe/public/scss/desk/notification.scss b/frappe/public/scss/desk/notification.scss
+index b83ef8a030..830d54f020 100644
+--- a/frappe/public/scss/desk/notification.scss
++++ b/frappe/public/scss/desk/notification.scss
+@@ -68,11 +68,46 @@
+ 	right: 6px;
+ 	height: 5.5px;
+ 	width: 5.5px;
++	border-radius: 50%;
+ 	transition: opacity 0.2s ease-in-out;
+ }
+ 
+ .sidebar-notification:hover .sidebar-item-icon.indicator::before {
++	opacity: 1;
++}
++
++.sidebar-notification .sidebar-item-icon[item-icon="bell"] {
++	position: relative;
++	overflow: visible;
++}
++
++.sidebar-notification .sidebar-item-icon[item-icon="bell"] .notifications-unseen {
++	--notification-unseen-dot-color: var(--red-500, #e03636);
++
++	display: block;
++	position: absolute;
++	top: 4px;
++	right: 6px;
++	height: 6px;
++	width: 6px;
++	border-radius: 50%;
++	background-color: var(--notification-unseen-dot-color);
++	box-shadow: 0 0 0 1.5px var(--bg-color);
+ 	opacity: 0;
++	pointer-events: none;
++	transform: scale(0.75);
++	transition: opacity 0.15s ease-in-out, transform 0.15s ease-in-out;
++	visibility: hidden;
++	z-index: 2;
++}
++
++.sidebar-notification.has-unseen-notifications
++	.sidebar-item-icon[item-icon="bell"]
++	.notifications-unseen,
++.sidebar-notification .sidebar-item-icon[item-icon="bell"] .notifications-unseen.active {
++	opacity: 1;
++	transform: scale(1);
++	visibility: visible;
+ }
+ 
+ .sidebar-notification .standard-sidebar-item .item-anchor {
+@@ -185,6 +220,8 @@
+ 	justify-content: space-between;
+ 
+ 	&.unread {
++		color: var(--text-color);
++
+ 		.mark-as-read {
+ 			flex-shrink: 0;
+ 			align-self: center;
+@@ -198,7 +235,17 @@
+ 			border-radius: 1000px;
+ 		}
+ 		.notification-body::before {
+-			background: var(--invert-neutral);
++			background-color: var(--invert-neutral);
++		}
++
++		.message,
++		b {
++			color: var(--text-color);
++			font-weight: var(--weight-medium);
++		}
++
++		.notification-timestamp {
++			color: var(--text-muted) !important;
+ 		}
+ 	}
+ 
+diff --git a/frappe/workflow/doctype/workflow_action/workflow_action.py b/frappe/workflow/doctype/workflow_action/workflow_action.py
+index 86bd133fed..c5cfe0d803 100644
+--- a/frappe/workflow/doctype/workflow_action/workflow_action.py
++++ b/frappe/workflow/doctype/workflow_action/workflow_action.py
+@@ -315,6 +315,7 @@ def update_completed_workflow_actions_using_role(user=None, workflow_action=None
+ 
+ 
+ def get_next_possible_transitions(workflow_name, state, doc=None):
++	
+ 	transitions = frappe.get_all(
+ 		"Workflow Transition",
+ 		fields=["allowed", "action", "state", "allow_self_approval", "next_state", "condition"],
+diff --git a/frappe/workflow/doctype/workflow_action_master/test_workflow_action_master.py b/frappe/workflow/doctype/workflow_action_master/test_workflow_action_master.py
+new file mode 100644
+index 0000000000..7fa3937d29
+--- /dev/null
++++ b/frappe/workflow/doctype/workflow_action_master/test_workflow_action_master.py
+@@ -0,0 +1,22 @@
++# Copyright (c) 2026, Frappe Technologies and Contributors
++# See license.txt
++
++# import frappe
++from frappe.tests import IntegrationTestCase
++
++
++# On IntegrationTestCase, the doctype test records and all
++# link-field test record dependencies are recursively loaded
++# Use these module variables to add/remove to/from that list
++EXTRA_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
++IGNORE_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
++
++
++
++class IntegrationTestWorkflowActionMaster(IntegrationTestCase):
++	"""
++	Integration tests for WorkflowActionMaster.
++	Use this class for testing interactions between multiple components.
++	"""
++
++	pass
+diff --git a/frappe/workflow/doctype/workflow_action_master/workflow_action_master.json b/frappe/workflow/doctype/workflow_action_master/workflow_action_master.json
+index 797d883102..148f80c298 100644
+--- a/frappe/workflow/doctype/workflow_action_master/workflow_action_master.json
++++ b/frappe/workflow/doctype/workflow_action_master/workflow_action_master.json
+@@ -1,5 +1,6 @@
+ {
+  "actions": [],
++ "allow_import": 1,
+  "allow_rename": 1,
+  "autoname": "field:workflow_action_name",
+  "creation": "2012-12-28 10:49:56",
+@@ -22,7 +23,7 @@
+  "icon": "fa fa-flag",
+  "idx": 1,
+  "links": [],
+- "modified": "2024-03-23 16:04:05.108415",
++ "modified": "2026-06-04 11:51:33.451899",
+  "modified_by": "Administrator",
+  "module": "Workflow",
+  "name": "Workflow Action Master",
+@@ -40,8 +41,9 @@
+   }
+  ],
+  "quick_entry": 1,
++ "row_format": "Dynamic",
+  "sort_field": "creation",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+-}
+\ No newline at end of file
++}
+diff --git a/realtime/utils.js b/realtime/utils.js
+index 137bde4b25..7f81e2b992 100644
+--- a/realtime/utils.js
++++ b/realtime/utils.js
+@@ -6,11 +6,14 @@ function get_url(socket, path) {
+ 		path = "";
+ 	}
+ 	let url = socket.request.headers.origin;
+-	if (conf.developer_mode) {
+-		let [protocol, host, port] = url.split(":");
+-		port = conf.webserver_port;
+-		url = `${protocol}:${host}:${port}`;
+-	}
++	//===================Start Custom For task TASK-2026-00077=========================
++	// if (conf.developer_mode) {
++	// 	let [protocol, host, port] = url.split(":");
++	// 	port = conf.webserver_port;
++	// 	url = `${protocol}:${host}:${port}`;
++	// }
++	//===================End Custom For task TASK-2026-00077=========================
++
+ 	return url + path;
+ }
+ 

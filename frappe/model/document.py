@@ -301,6 +301,60 @@ class Document(BaseDocument):
 		self.flags.pop("ignore_children", None)
 
 		self.load_children_from_db()
+		#============================== Start Custom for TASK-2026-00251==============================
+		# Do not run this while metadata documents are being loaded. Calling
+		# self.meta or frappe.get_meta() here for Meta/DocType documents recurses
+		# back into Document.load_from_db().
+		skip_company_filter = (
+			getattr(self, "_metaclass", False)
+			or self.doctype
+			in {
+				"DocType",
+				"DocField",
+				"DocPerm",
+				"DocType Action",
+				"DocType Link",
+				"DocType State",
+			}
+			or frappe.session.user in ("Administrator", "Guest")
+		)
+
+		if not skip_company_filter:
+			employee_company = frappe.db.get_value(
+				"Employee",
+				{"user_id": frappe.session.user},
+				"company",
+			)
+
+			if employee_company:
+				table_fields = self._get_table_fields()
+				has_company_field = self.meta.has_field("company")
+				has_company_in_children = any(
+					df.options and frappe.get_meta(df.options).has_field("company")
+					for df in table_fields
+				)
+
+				if has_company_field or has_company_in_children:
+					if hasattr(self, "company") and self.company:
+						if self.company != employee_company:
+							pass
+
+					for df in table_fields:
+						rows = self.get(df.fieldname)
+
+						if not rows:
+							continue
+
+						if not hasattr(rows[0], "company"):
+							continue
+
+						filtered = [
+							row for row in rows
+							if getattr(row, "company", None) == employee_company
+						]
+
+						self.set(df.fieldname, filtered)
+#============================== End Custom for TASK-2026-00251==============================
 
 		# sometimes __setup__ can depend on child values, hence calling again at the end
 		if hasattr(self, "__setup__"):

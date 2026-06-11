@@ -240,6 +240,10 @@ frappe.ui.Sidebar = class Sidebar {
 		this.workspace_sidebar_items = updated_items;
 	}
 	setup(workspace_title) {
+		if (!workspace_title) {
+			return;
+		}
+
 		if (!this.onboarding_widget) {
 			this.onboarding_widget = {};
 		}
@@ -622,50 +626,61 @@ frappe.ui.Sidebar = class Sidebar {
 	}
 
 	set_workspace_sidebar(router) {
-		try {
-			const route = frappe.get_route();
-			let target;
+	try {
+		const route = frappe.get_route();
+		let target;
 
-			if (route.length === 2 && frappe.boot.workspace_sidebar_item[route[1].toLowerCase()]) {
-				// route points directly at a workspace, e.g. List/<Workspace>
-				target = route[1];
-			} else {
-				const entity = this.entity_from_route(route);
-				const module = router?.meta?.module;
-				target = this.resolve_sidebar(entity, module);
-			}
-
-			// only rebuild when the target differs from the current sidebar, so
-			// this stays a cheap no-op when re-run by page-change / form-refresh
-			if (target && target !== this.sidebar_title) {
-				frappe.app.sidebar.setup(target);
-			}
-		} catch (e) {
-			console.error(e);
+		if (route.length === 2 && frappe.boot.workspace_sidebar_item?.[route[1].toLowerCase()]) {
+			// route points directly at a workspace, e.g. List/<Workspace>
+			target = route[1];
+		} else {
+			const entity = this.entity_from_route(route);
+			const module = router?.meta?.module;
+			target = this.resolve_sidebar(entity, module);
 		}
 
-		this.set_active_workspace_item();
+		// only rebuild when the target differs from the current sidebar, so
+		// this stays a cheap no-op when re-run by page-change / form-refresh
+		if (target && target !== this.sidebar_title) {
+			frappe.app.sidebar.setup(target);
+		}
+	} catch (e) {
+		console.error(e);
+	}
+
+	this.set_active_workspace_item();
 	}
 
 	entity_from_route(route) {
 		switch (route.length) {
 			case 1:
 				return route[0];
+
+			case 2:
+				return route[1];
+
 			case 3:
 				return route[0] === "Workspaces" && route[1] === "private" ? route[2] : route[1];
+
 			default:
-				return route[0];
+				return route[1];
 		}
 	}
 
 	// Pick which workspace sidebar to show for the current route.
-	// Returns a workspace title (or null). Rules are ordered by priority:
-	// the first one that yields a sidebar wins.
+	// Returns a workspace title or null.
 	resolve_sidebar(entity, module) {
+		if (!entity) return null;
+
 		let candidates = this.get_workspace_sidebars(entity);
 		this.preferred_sidebars = candidates;
 
-		const remembered = JSON.parse(localStorage.getItem("sidebar_item_map") || "{}");
+		let remembered = {};
+		try {
+			remembered = JSON.parse(localStorage.getItem("sidebar_item_map") || "{}") || {};
+		} catch {
+			remembered = {};
+		}
 
 		let sidebar_name = null;
 
@@ -678,34 +693,47 @@ frappe.ui.Sidebar = class Sidebar {
 		} else {
 			// 3. narrow candidates to the active app
 			if (module) {
-				candidates = this.filter_sidebars_from_app(
-					candidates,
-					frappe.boot.module_app[module.toLowerCase().replace(/[ -]/g, "_")]
-				);
+				const app = frappe.boot.module_app?.[module.toLowerCase().replace(/[ -]/g, "_")];
+				const app_sidebars = this.filter_sidebars_from_app(candidates, app);
+
+				if (app_sidebars.length) {
+					candidates = app_sidebars;
+				}
 			}
 
 			// 4. resolve by what is left
 			if (candidates.length === 1) {
 				sidebar_name = candidates[0];
 			} else if (candidates.length > 1) {
-				sidebar_name = candidates.find((c) => c.toLowerCase() === module?.toLowerCase());
+				sidebar_name =
+					candidates.find((c) => c.toLowerCase() === module?.toLowerCase()) ||
+					this.get_workspace_for_module?.(module);
 			} else if (module) {
 				sidebar_name = this.resolve_module_sidebar(module);
 			}
 		}
+
 		if (!sidebar_name && candidates.length > 0) {
 			sidebar_name = candidates[0];
 		}
+
 		return sidebar_name;
 	}
+
 	filter_sidebars_from_app(sidebars, app) {
 		let filter_sidebars = [];
+
+		if (!app) return filter_sidebars;
+
 		sidebars.forEach((sidebar) => {
-			const config = frappe.boot.workspace_sidebar_item[sidebar.toLowerCase()];
-			if (config && config.app === app && !filter_sidebars.includes(sidebar)) {
+			if (
+				!filter_sidebars.includes(sidebar) &&
+				frappe.boot.workspace_sidebar_item?.[sidebar.toLowerCase()]?.app === app
+			) {
 				filter_sidebars.push(sidebar);
 			}
 		});
+
 		return filter_sidebars;
 	}
 	// Public entry point used by page/report views to switch the sidebar
