@@ -398,7 +398,7 @@ def handle_exception(e):
 		).render()
 
 	elif http_status_code == 429:
-		response = frappe.rate_limiter.respond()
+		response = frappe.rate_limiter.respond() or Response(_("Too Many Requests"), status=429)
 
 	else:
 		response = ErrorPage(
