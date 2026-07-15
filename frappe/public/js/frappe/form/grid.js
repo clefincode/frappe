@@ -565,6 +565,9 @@ export default class Grid {
 		if (!this.grid_rows) {
 			return;
 		}
+		if (!this.grid_rows_by_docname) {
+			this.grid_rows_by_docname = {};
+		}
 
 		// index existing rows by doc object reference for identity-based matching
 		let rows_by_doc = new Map();
