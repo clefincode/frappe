@@ -307,6 +307,7 @@ def update_completed_workflow_actions_using_role(user=None, workflow_action=None
 
 
 def get_next_possible_transitions(workflow_name, state, doc=None):
+	
 	transitions = frappe.get_all(
 		"Workflow Transition",
 		fields=["allowed", "action", "state", "allow_self_approval", "next_state", "condition"],

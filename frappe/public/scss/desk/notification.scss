@@ -68,11 +68,46 @@
 	right: 6px;
 	height: 5.5px;
 	width: 5.5px;
+	border-radius: 50%;
 	transition: opacity 0.2s ease-in-out;
 }
 
 .sidebar-notification:hover .sidebar-item-icon.indicator::before {
+	opacity: 1;
+}
+
+.sidebar-notification .sidebar-item-icon[item-icon="bell"] {
+	position: relative;
+	overflow: visible;
+}
+
+.sidebar-notification .sidebar-item-icon[item-icon="bell"] .notifications-unseen {
+	--notification-unseen-dot-color: var(--red-500, #e03636);
+
+	display: block;
+	position: absolute;
+	top: 4px;
+	right: 6px;
+	height: 6px;
+	width: 6px;
+	border-radius: 50%;
+	background-color: var(--notification-unseen-dot-color);
+	box-shadow: 0 0 0 1.5px var(--bg-color);
 	opacity: 0;
+	pointer-events: none;
+	transform: scale(0.75);
+	transition: opacity 0.15s ease-in-out, transform 0.15s ease-in-out;
+	visibility: hidden;
+	z-index: 2;
+}
+
+.sidebar-notification.has-unseen-notifications
+	.sidebar-item-icon[item-icon="bell"]
+	.notifications-unseen,
+.sidebar-notification .sidebar-item-icon[item-icon="bell"] .notifications-unseen.active {
+	opacity: 1;
+	transform: scale(1);
+	visibility: visible;
 }
 
 .sidebar-notification .standard-sidebar-item .item-anchor {
@@ -185,6 +220,8 @@
 	justify-content: space-between;
 
 	&.unread {
+		color: var(--text-color);
+
 		.mark-as-read {
 			flex-shrink: 0;
 			align-self: center;
@@ -198,7 +235,17 @@
 			border-radius: 1000px;
 		}
 		.notification-body::before {
-			background: var(--invert-neutral);
+			background-color: var(--invert-neutral);
+		}
+
+		.message,
+		b {
+			color: var(--text-color);
+			font-weight: var(--weight-medium);
+		}
+
+		.notification-timestamp {
+			color: var(--text-muted) !important;
 		}
 	}
 

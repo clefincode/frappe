@@ -172,6 +172,7 @@ def clear_website_cache(context: CliCtxObj):
 @click.option("--reason")
 @pass_context
 def destroy_all_sessions(context: CliCtxObj, reason=None):
+	frappe.log_error('destroy_all_sessions','destroy_all_sessions')
 	"Clear sessions of all users (logs them out)"
 	import frappe.sessions
 
