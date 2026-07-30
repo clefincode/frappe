@@ -77,14 +77,14 @@ class DeskViews:
 		item_type = item_type.lower()
 
 		if item_type == "doctype":
+			if name not in (self.can_read or []) or name not in (self.restricted_doctypes or []):
+				return False
+
 			try:
-				return (
-					name in (self.can_read or [])
-					and name in (self.restricted_doctypes or [])
-					and frappe.has_permission(name)
-				)
-			except frappe.DoesNotExistError:
-				frappe.clear_last_message()
+				return frappe.has_permission(name)
+			except frappe.PermissionError:
+				# Some singleton / virtual doctypes perform extra controller-level permission checks
+				# during lazy loading. Treat these as "not allowed" while building Desk metadata.
 				return False
 		if item_type == "page":
 			return name in self.allowed_pages and name in self.restricted_pages

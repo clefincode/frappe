@@ -448,9 +448,17 @@ textarea.form-control {
 
 /* duration control */
 
+.frappe-control[data-fieldtype="Duration"] .control-input-wrapper {
+	position: relative;
+}
+
+
 .duration-picker {
-	position: fixed;
-	z-index: 999;
+	position: absolute;
+	top: 100%;
+	left: 0;
+	margin-top: 4px;
+	z-index: 9999;
 	border-radius: var(--border-radius);
 	box-shadow: var(--shadow-sm);
 	background: var(--popover-bg);

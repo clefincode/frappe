@@ -1,4 +1,5 @@
 import frappe
+from frappe.core.doctype.user_permission.test_user_permission import create_user
 from frappe.desk.desk_views import DeskViews
 from frappe.desk.doctype.note.note import _get_unseen_notes, get_unseen_notes, mark_as_seen
 from frappe.tests import IntegrationTestCase
@@ -95,3 +96,14 @@ class TestPermissionQueries(IntegrationTestCase):
 		# Test user must not see admin user's report
 		self.assertNotIn("Test Admin Report", allowed_reports)
 		self.assertIn("Test User Report", allowed_reports)
+
+	def test_is_item_allowed_handles_controller_permission_errors(self):
+		user = create_user("test_boot_sidebar@example.com", "Website Manager")
+		frappe.set_user(user.name)
+		self.addCleanup(lambda: frappe.set_user("Administrator"))
+
+		views = DeskViews()
+		views.can_read = ["System Health Report"]
+		views.restricted_doctypes = ["System Health Report"]
+
+		self.assertFalse(views.is_item_allowed("System Health Report", "doctype"))
