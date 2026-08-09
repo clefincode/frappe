@@ -2738,7 +2738,7 @@ msgstr "هل أنت متأكد من رغبتك في إنشاء تقرير جدي
 
 #: frappe/public/js/frappe/desk.js:390
 msgid "Are you sure you want to log out?"
-msgstr ""
+msgstr "هل أنت متأكد أنك تريد تسجيل الخروج؟"
 
 #: frappe/public/js/frappe/form/toolbar.js:130
 msgid "Are you sure you want to merge {0} with {1}?"
@@ -34137,4 +34137,3 @@ msgstr "{} غير موجود في متغير PATH! هذا مطلوب لإنشا�
 #: frappe/public/js/frappe/file_uploader/WebLink.vue:4
 msgid "← Back to upload files"
 msgstr "← العودة إلى صفحة تحميل الملفات"
-
