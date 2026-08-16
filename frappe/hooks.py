@@ -412,6 +412,9 @@ override_whitelisted_methods = {
 ignore_links_on_delete = [
 	"Communication",
 	"ToDo",
+	# //============================ Start Custom For Workflow Action delete/cancel link ignore ============================
+	"Workflow Action",
+	# //============================ End Custom For Workflow Action delete/cancel link ignore ============================
 	"DocShare",
 	"Email Unsubscribe",
 	"Activity Log",

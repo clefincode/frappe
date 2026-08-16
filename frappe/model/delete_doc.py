@@ -489,6 +489,9 @@ def raise_link_exists_exception(doc, reference_doctype, reference_docname, row="
 
 def delete_dynamic_links(doctype, name):
 	delete_references("ToDo", doctype, name, "reference_type")
+	# //============================ Start Custom For Workflow Action delete cleanup ============================
+	delete_references("Workflow Action", doctype, name)
+	# //============================ End Custom For Workflow Action delete cleanup ============================
 	delete_references("Email Unsubscribe", doctype, name)
 	delete_references("DocShare", doctype, name, "share_doctype", "share_name")
 	delete_references("Version", doctype, name, "ref_doctype", "docname")
