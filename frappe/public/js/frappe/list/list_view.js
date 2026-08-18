@@ -1053,7 +1053,9 @@ frappe.views.ListView = class ListView extends frappe.views.BaseList {
 		 * Calculates the width of a text element based on its length.
 		 * If the length of the text is not available, it defaults to a length of 22.5.
 		 */
-		let textLength = $(column_html).text()?.trim()?.length || 22.5;
+		// #============================ Start Custom For List View Column Width ============================
+		let textLength = $("<div>").html(column_html || "").text().trim().length || 22.5;
+		// #============================ End Custom For List View Column Width ============================
 		let calculatedWidth = (textLength * 10) / 1.3 + (col.type == "Subject" ? 30 : 0);
 
 		/**
